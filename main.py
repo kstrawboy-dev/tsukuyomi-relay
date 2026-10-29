@@ -3,162 +3,121 @@ from fastapi.responses import HTMLResponse
 
 app = FastAPI()
 
-current_command = ""
-latest_response = "Waiting for target connection..."
-latest_screen_frame = ""
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
+HTML_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TSUKUYOMI // Ultimate Enterprise C2 Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { background-color: #07090e; color: #e2e8f0; font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(18, 24, 36, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .log { font-family: monospace; background: #090e17; border: 1px solid #1e293b; color: #55f0b3; padding: 12px; border-radius: 10px; height: 260px; overflow-y: auto; }
-        .screen-box { width: 280px; height: 560px; background: #000; border: 6px solid #1e293b; border-radius: 24px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin: auto; }
-        .screen-box img { width: 100%; height: 100%; object-fit: cover; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TSUKUYOMI — Demo Control Center</title>
+<style>
+:root{--bg:#08131f;--panel:#0d1e2d;--panel2:#10283a;--line:#1e4055;--blue:#62d4ff;--blue2:#a4eaff;--text:#e8f7ff;--muted:#8ba9ba;--green:#75e6c2;--yellow:#ffd17a;--shadow:0 12px 36px #0004}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 20% 0%,#15344a 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}button,input,textarea,select{font:inherit}button{cursor:pointer}.app{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}.side{background:#07111cdd;border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh;overflow:auto}.brand{display:flex;gap:12px;align-items:center;padding:4px 10px 22px}.logo{width:42px;height:42px;border:1px solid var(--blue);border-radius:14px;display:grid;place-items:center;color:var(--blue);font-size:23px;box-shadow:0 0 22px #62d4ff22}.brand b{letter-spacing:2px;font-size:16px}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:2px}.navlabel{color:#638397;font-size:10px;letter-spacing:2px;padding:15px 12px 7px}.nav{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:1px solid transparent;background:transparent;color:#a7c1d0;text-align:left;border-radius:11px;margin:2px 0}.nav span{width:22px;text-align:center;font-size:17px}.nav:hover,.nav.active{background:linear-gradient(100deg,#15374b,#102537);border-color:#28536a;color:#effbff}.nav.active{box-shadow:inset 3px 0 var(--blue)}.sidebottom{margin-top:22px;border:1px solid var(--line);background:#0a1b29;border-radius:13px;padding:13px;color:var(--muted);font-size:12px}.demo-pill{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:10px;letter-spacing:1.4px}.dot{width:7px;height:7px;background:var(--green);border-radius:50%;display:inline-block;box-shadow:0 0 9px #75e6c288}.main{min-width:0;padding:24px clamp(14px,3vw,36px) 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:25px}.eyebrow{color:var(--blue);letter-spacing:2px;font-size:10px}.top h1{font-size:clamp(23px,3vw,31px);margin:3px 0 0;letter-spacing:-.7px}.topright{display:flex;align-items:center;gap:12px}.clock{font-variant-numeric:tabular-nums;color:var(--blue2);background:#0b2030;border:1px solid var(--line);padding:9px 12px;border-radius:10px}.badge{font-size:10px;color:var(--yellow);border:1px solid #745a2d;background:#332816;padding:6px 9px;border-radius:8px;letter-spacing:1px}.page{display:none;animation:fade .2s ease}.page.active{display:block}@keyframes fade{from{opacity:.5;transform:translateY(4px)}to{opacity:1;transform:none}}.welcome{padding:22px;border:1px solid #28536a;background:linear-gradient(115deg,#12374b,#0d1e2d 65%);border-radius:18px;display:flex;justify-content:space-between;gap:15px;align-items:center;box-shadow:var(--shadow);margin-bottom:18px}.welcome h2{margin:0 0 5px;font-size:21px}.welcome p{color:#a7c4d4;margin:0;max-width:660px}.welcome .orb{font-size:48px;color:var(--blue);opacity:.85}.grid{display:grid;gap:15px}.stats{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:18px}.card{background:linear-gradient(145deg,#102436,#0b1b29);border:1px solid var(--line);border-radius:15px;padding:17px;min-width:0;box-shadow:var(--shadow)}.statlabel{color:var(--muted);font-size:12px}.statnum{font-size:27px;font-weight:700;margin:7px 0 2px}.statfoot{color:var(--green);font-size:11px}.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:22px 0 12px}.sectionhead h2{font-size:17px;margin:0}.muted{color:var(--muted)}.devicegrid{grid-template-columns:repeat(3,minmax(0,1fr))}.device{position:relative}.deviceicon{width:43px;height:54px;border:1px solid #3d728d;border-radius:10px;display:grid;place-items:center;color:var(--blue);font-size:23px;float:left;margin-right:12px}.device h3{margin:2px 0 1px;font-size:15px}.device p{margin:0;color:var(--muted);font-size:12px}.status{font-size:10px;color:var(--green);letter-spacing:1px}.bar{height:5px;background:#203c4d;border-radius:9px;overflow:hidden;margin:7px 0 12px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#48b9e9,#8ee7ff);border-radius:9px}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.btn{border:1px solid #2b607a;color:var(--blue2);background:#102d40;padding:9px 12px;border-radius:9px}.btn:hover{background:#17425b}.btn.primary{background:linear-gradient(100deg,#1687b8,#36b8e8);color:#04141d;border-color:transparent;font-weight:700}.btn.ghost{background:transparent;border-color:var(--line);color:#b4d1df}.btn.danger{border-color:#75434b;color:#ffb7c1;background:#301d27}.btn:disabled{opacity:.4;cursor:not-allowed}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.field{background:#081824;border:1px solid #25465b;color:var(--text);padding:10px 12px;border-radius:9px;outline:none;min-width:0}.field:focus{border-color:var(--blue)}.search{flex:1;min-width:170px}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:13px}.table{width:100%;border-collapse:collapse;min-width:500px}.table th,.table td{text-align:left;padding:12px 14px;border-bottom:1px solid #1b3546}.table th{color:#83a6b9;font-size:10px;letter-spacing:1px;background:#0b1b28}.table tr:last-child td{border-bottom:0}.table td{font-size:13px}.avatar{display:inline-grid;place-items:center;width:31px;height:31px;border-radius:10px;background:#183a50;color:var(--blue2);margin-right:8px}.pill{font-size:10px;padding:4px 7px;border-radius:6px;background:#153a4a;color:var(--blue2)}.split{grid-template-columns:1.15fr .85fr}.feeditem{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid #1a3545}.feeditem:last-child{border-bottom:0}.feedicon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#153247;color:var(--blue)}.feeditem b{font-size:12px}.feeditem small{display:block;color:var(--muted);margin-top:3px}.mediaGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.media{background:#0a1b29;border:1px solid var(--line);border-radius:13px;overflow:hidden}.thumb{height:125px;display:grid;place-items:center;font-size:37px;background:linear-gradient(135deg,#17425a,#102234)}.media div:last-child{padding:11px}.media b{font-size:12px;display:block;overflow-wrap:anywhere}.media small{color:var(--muted)}.foldergrid{grid-template-columns:repeat(3,minmax(0,1fr))}.folder{display:flex;align-items:center;gap:12px}.folder .ficon{font-size:26px}.folder b{display:block}.folder small{color:var(--muted)}.console{background:#06111a;border:1px solid #1d3f51;border-radius:12px;padding:14px;color:#9ce7ff;font:12px/1.7 ui-monospace,SFMono-Regular,monospace;min-height:190px;white-space:pre-wrap;overflow-wrap:anywhere}.demoInput{width:100%;min-height:100px;resize:vertical;background:#081824;border:1px solid #28546b;color:#dff8ff;border-radius:10px;padding:12px;outline:none}.note{padding:12px 14px;border:1px solid #725b2e;background:#2a2418;color:#f5d99d;border-radius:10px;font-size:12px;margin-bottom:15px}.mapmock{height:340px;border-radius:14px;border:1px solid var(--line);position:relative;overflow:hidden;background-color:#0a1c29;background-image:linear-gradient(#1a3a4a 1px,transparent 1px),linear-gradient(90deg,#1a3a4a 1px,transparent 1px);background-size:42px 42px}.road{position:absolute;height:15px;background:#183344;border:1px solid #2a5264;transform:rotate(-25deg);width:130%;left:-15%;top:42%}.road.r2{transform:rotate(36deg);top:62%}.pin{position:absolute;color:var(--blue);font-size:25px;filter:drop-shadow(0 0 7px #62d4ff88)}.center{text-align:center}.empty{padding:28px;color:var(--muted);text-align:center}.footnote{margin-top:20px;color:#638397;font-size:11px;text-align:center}.toggle{accent-color:#62d4ff}.hidden{display:none!important}
+@media(max-width:1000px){.app{grid-template-columns:205px minmax(0,1fr)}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.devicegrid{grid-template-columns:1fr}.mediaGrid,.foldergrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.app{display:block}.side{position:relative;height:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line)}.brand{padding:3px 8px 10px}.navlabel{display:none}.navlist{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px}.nav{white-space:nowrap;width:auto;flex:0 0 auto;padding:9px 11px}.nav span{width:auto}.sidebottom{display:none}.main{padding:17px 12px 28px}.top{align-items:flex-start}.topright{flex-direction:column;align-items:flex-end;gap:6px}.welcome{padding:17px}.welcome .orb{display:none}.stats{gap:9px}.card{padding:13px}.split{grid-template-columns:1fr}.mediaGrid,.foldergrid{grid-template-columns:repeat(2,minmax(0,1fr))}.thumb{height:95px}.clock{font-size:11px;padding:5px 8px}}
+</style>
 </head>
-<body class="p-4 md:p-8 flex flex-col items-center">
-    <!-- Header -->
-    <header class="w-full max-w-5xl glass-panel p-4 rounded-2xl mb-6 flex justify-between items-center shadow-lg">
-        <div>
-            <h1 class="font-bold text-base md:text-lg text-white tracking-wider">TSUKUYOMI // C2 COMMAND CENTER</h1>
-            <p class="text-xs text-slate-400">Status: <span class="text-green-400 font-semibold">ONLINE (ULTIMATE EDITION)</span></p>
-        </div>
-        <div class="px-3 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-mono">TARGET: SECURE TUNNEL</div>
-    </header>
+<body>
+<div class="app">
+<aside class="side">
+ <div class="brand"><div class="logo">月</div><div><b>TSUKUYOMI</b><small>CONTROL LAB / DEMO</small></div></div>
+ <div class="navlabel">WORKSPACE</div>
+ <div class="navlist">
+ <button class="nav active" data-page="overview"><span>⌂</span>Overview</button>
+ <button class="nav" data-page="devices"><span>▣</span>Devices</button>
+ <button class="nav" data-page="contacts"><span>♙</span>Contacts</button>
+ <button class="nav" data-page="sms"><span>▤</span>SMS / Messages</button>
+ <button class="nav" data-page="media"><span>▧</span>Media Gallery</button>
+ <button class="nav" data-page="files"><span>▱</span>File Manager</button>
+ <button class="nav" data-page="screen"><span>▣</span>Screen Preview</button>
+ <button class="nav" data-page="location"><span>⌖</span>Location Map</button>
+ <button class="nav" data-page="keylogger"><span>⌨</span>Keylogger Lab</button>
+ <button class="nav" data-page="camera"><span>◉</span>Camera Lab</button>
+ <button class="nav" data-page="audio"><span>♫</span>Audio Lab</button>
+ <button class="nav" data-page="notifications"><span>♧</span>Notifications</button>
+ <button class="nav" data-page="activity"><span>≋</span>Activity Logs</button>
+ <button class="nav" data-page="security"><span>⬡</span>Permissions & Security</button>
+ <button class="nav" data-page="settings"><span>⚙</span>Settings</button>
+ </div>
+ <div class="sidebottom"><div class="demo-pill"><i class="dot"></i> SANDBOX ACTIVE</div><p style="margin:7px 0 0">All devices and records are simulated. No real phone data is accessed.</p></div>
+</aside>
+<main class="main">
+<header class="top"><div><div class="eyebrow">TSUKUYOMI / CYBER OPERATIONS UI</div><h1 id="pageTitle">Overview</h1></div><div class="topright"><span class="badge">DEMO ENVIRONMENT</span><span class="clock" id="clock">--:--:--</span></div></header>
 
-    <!-- Main Workspace -->
-    <main class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-6">
-        
-        <!-- Left Column: Live Screen Mirroring (5 Cols) -->
-        <div class="md:col-span-5 glass-panel p-4 rounded-2xl flex flex-col items-center space-y-4">
-            <h3 class="text-xs font-bold font-mono uppercase text-slate-300 tracking-wide">Live Screen Mirroring</h3>
-            <div class="screen-box" id="screenContainer">
-                <span class="text-xs text-slate-500 text-center px-4">Waiting for screen frames...</span>
-            </div>
-            <div class="flex gap-2 w-full">
-                <button onclick="sendCmd('SCREEN_START')" class="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition shadow-md">Start Stream</button>
-                <button onclick="sendCmd('SCREEN_STOP')" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs border border-slate-700 transition">Stop Stream</button>
-            </div>
-        </div>
+<section class="page active" id="overview">
+ <div class="welcome"><div><div class="eyebrow">WELCOME BACK, OPERATOR</div><h2>Control Center</h2><p>A high-fidelity interactive dashboard prototype. Browse mock device records, explore modules, and test the interface safely.</p></div><div class="orb">◈</div></div>
+ <div class="grid stats">
+  <div class="card"><div class="statlabel">Demo devices</div><div class="statnum">03</div><div class="statfoot">● Sandbox records</div></div>
+  <div class="card"><div class="statlabel">Mock contacts</div><div class="statnum">128</div><div class="statfoot">↑ Sample dataset</div></div>
+  <div class="card"><div class="statlabel">Demo files</div><div class="statnum">246</div><div class="statfoot">▱ Local mock inventory</div></div>
+  <div class="card"><div class="statlabel">Security status</div><div class="statnum" style="font-size:21px">Protected</div><div class="statfoot">● No live connection</div></div>
+ </div>
+ <div class="sectionhead"><h2>Registered demo devices</h2><button class="btn" data-go="devices">View all →</button></div>
+ <div class="grid devicegrid">
+  <article class="card device"><div class="deviceicon">▣</div><div class="status">● ONLINE · SIMULATED</div><h3>Pixel Demo 01</h3><p>Android 15 · DEMO-7A21</p><div style="clear:both;height:14px"></div><div class="row"><span class="muted">Battery</span><b>84%</b></div><div class="bar"><i style="width:84%"></i></div><button class="btn" data-go="devices">Open device</button></article>
+  <article class="card device"><div class="deviceicon">▣</div><div class="status">● ONLINE · SIMULATED</div><h3>Galaxy Sample 02</h3><p>Android 14 · DEMO-4C90</p><div style="clear:both;height:14px"></div><div class="row"><span class="muted">Battery</span><b>62%</b></div><div class="bar"><i style="width:62%"></i></div><button class="btn" data-go="devices">Open device</button></article>
+  <article class="card device"><div class="deviceicon">▣</div><div class="status" style="color:var(--yellow)">● IDLE · SIMULATED</div><h3>Emulator Lab 03</h3><p>Android 13 · DEMO-EM03</p><div style="clear:both;height:14px"></div><div class="row"><span class="muted">Battery</span><b>37%</b></div><div class="bar"><i style="width:37%"></i></div><button class="btn" data-go="devices">Open device</button></article>
+ </div>
+ <div class="grid split" style="margin-top:18px"><div class="card"><div class="sectionhead" style="margin-top:0"><h2>Recent activity</h2><button class="btn ghost" data-go="activity">View logs</button></div><div id="overviewFeed"></div></div><div class="card"><div class="sectionhead" style="margin-top:0"><h2>Quick modules</h2></div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><button class="btn" data-go="contacts">♙ Contacts</button><button class="btn" data-go="media">▧ Media</button><button class="btn" data-go="keylogger">⌨ Keylogger Lab</button><button class="btn" data-go="screen">▣ Screen preview</button><button class="btn" data-go="location">⌖ Map</button><button class="btn" data-go="security">⬡ Security</button></div><p class="muted" style="font-size:12px;margin-bottom:0">Modules show fictional sample content only.</p></div></div>
+</section>
 
-        <!-- Right Column: Command Dispatcher & Terminal Logs (7 Cols) -->
-        <div class="md:col-span-7 glass-panel p-4 rounded-2xl flex flex-col space-y-4">
-            <h3 class="text-xs font-bold font-mono uppercase text-slate-300 tracking-wide">Command Dispatcher & Terminal</h3>
-            
-            <!-- Quick Feature & Power Buttons Grid -->
-            <div class="grid grid-cols-3 gap-2">
-                <button onclick="sendCmd('FLASH_ON')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-amber-400 font-medium transition">🔦 Flash ON</button>
-                <button onclick="sendCmd('FLASH_OFF')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-slate-300 font-medium transition">🔦 Flash OFF</button>
-                <button onclick="sendCmd('VIBRATE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-cyan-300 font-medium transition">📳 Vibrate</button>
-                <button onclick="sendCmd('GPS')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-rose-400 font-medium transition">📍 GPS Fix</button>
-                <button onclick="sendCmd('DUMP_SMS')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-green-400 font-medium transition">📨 Dump SMS</button>
-                <button onclick="sendCmd('STEALTH_ON')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-purple-400 font-medium transition">🥷 Hide Icon</button>
-                <button onclick="sendCmd('LOCK_PHONE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-red-400 font-medium transition">🔒 Lock Device</button>
-                <button onclick="sendCmd('WAKE_PHONE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-teal-300 font-medium transition">🔓 Wake Screen</button>
-                <button onclick="sendCmd('VPN_TOGGLE')" class="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs text-blue-400 font-medium transition">🛡️ VPN Tunnel</button>
-            </div>
+<section class="page" id="devices"><div class="note">Sandbox only: these are fictional device profiles, not connected phones.</div><div class="toolbar"><input class="field search" id="deviceSearch" placeholder="Search devices…"><button class="btn primary" id="refreshDevices">↻ Refresh demo</button></div><div class="grid devicegrid" id="deviceList"></div></section>
 
-            <!-- Custom Command Input Bar -->
-            <div class="flex space-x-2">
-                <input type="text" id="customCmd" placeholder="Enter custom command or payload..." class="flex-1 bg-slate-900 border border-slate-700 px-3 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400">
-                <button onclick="dispatchCustom()" class="px-5 py-2.5 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold rounded-xl text-xs transition">SEND</button>
-            </div>
+<section class="page" id="contacts"><div class="note">Sample contact directory for UI testing. No address book is read from a device.</div><div class="toolbar"><input class="field search" id="contactSearch" placeholder="Search name, number or email…"><button class="btn" id="exportContacts">Export demo CSV</button></div><div class="tablewrap"><table class="table"><thead><tr><th>CONTACT</th><th>PHONE</th><th>EMAIL</th><th>GROUP</th></tr></thead><tbody id="contactsBody"></tbody></table></div></section>
 
-            <!-- Real-time Terminal Log Box -->
-            <div class="log" id="logBox">[SYSTEM] Ultimate FastAPI C2 Dashboard active...</div>
-        </div>
-    </main>
+<section class="page" id="sms"><div class="note">Fictional message threads only. Sending is disabled; nothing is sent to a real phone.</div><div class="grid split"><div class="card"><div class="toolbar"><input class="field search" id="smsSearch" placeholder="Search conversations…"></div><div id="threads"></div></div><div class="card"><div class="sectionhead" style="margin-top:0"><h2 id="threadTitle">Sample conversation</h2><span class="pill">DEMO</span></div><div id="threadMessages"></div><textarea class="demoInput" id="smsDraft" placeholder="Type a local demo reply…"></textarea><div class="row" style="margin-top:10px"><small class="muted">Local preview only</small><button class="btn primary" id="addReply">Add demo reply</button></div></div></div></section>
 
-    <!-- JavaScript Control & Polling Logic -->
-    <script>
-        async function sendCmd(cmd) {
-            try {
-                await fetch('/api/command', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: cmd })
-                });
-                log("[DISPATCHED] -> " + cmd);
-            } catch (e) {
-                log("[ERROR] Failed to dispatch command.");
-            }
-        }
+<section class="page" id="media"><div class="note">Mock gallery with placeholder thumbnails; it does not access the phone gallery.</div><div class="toolbar"><input class="field search" id="mediaSearch" placeholder="Search media…"><select class="field" id="mediaType"><option value="all">All media</option><option value="photo">Photos</option><option value="video">Videos</option></select></div><div class="grid mediaGrid" id="mediaList"></div></section>
 
-        function dispatchCustom() {
-            let input = document.getElementById('customCmd');
-            if(input.value.trim()) {
-                sendCmd(input.value.trim());
-                input.value = '';
-            }
-        }
+<section class="page" id="files"><div class="note">Fictional file tree. Opening a folder shows the sample files stored in this page's demo dataset only.</div><div class="toolbar"><input class="field search" id="fileSearch" placeholder="Search files and folders…"><button class="btn" id="backFolders">← All folders</button></div><div class="grid foldergrid" id="fileList"></div><div class="card hidden" id="folderContents" style="margin-top:15px"><div class="sectionhead" style="margin-top:0"><h2 id="folderTitle">Folder</h2><span class="pill">SAMPLE DATA</span></div><div id="folderFiles"></div></div></section>
 
-        async function pollData() {
-            try {
-                let res = await fetch('/api/response');
-                let data = await res.json();
-                if(data.response && data.response !== window.lastResp) {
-                    window.lastResp = data.response;
-                    log("[TARGET] " + data.response);
-                }
+<section class="page" id="screen"><div class="note">This is a simulated screen preview, not live screen mirroring. Use the controls to change the mock screen state.</div><div class="grid split"><div class="card center"><div style="display:inline-block;width:min(100%,280px);padding:10px;border:2px solid #4a7184;border-radius:28px;background:#020a10"><div style="height:13px;width:70px;background:#263c48;border-radius:20px;margin:0 auto 9px"></div><div id="phoneScreen" style="height:430px;border-radius:18px;background:linear-gradient(160deg,#12364a,#06131e);padding:20px 13px;display:flex;flex-direction:column;justify-content:space-between;text-align:left"><div><div class="row"><b>9:41</b><span>▮ ▰ ◉</span></div><h2 style="margin-top:48px">Hello there.</h2><p class="muted">Your demo screen is ready.</p><div class="card" style="padding:12px;margin-top:30px">☁️<br><b>Weather</b><p class="muted">Clear · 24°</p></div></div><div class="row"><span>●</span><span>◉</span><span>▢</span></div></div></div><p class="muted">SIMULATED DISPLAY · 1080 × 2400</p></div><div class="card"><h2 style="margin-top:0">Preview controls</h2><label class="muted">Wallpaper</label><select class="field" id="wallpaper" style="width:100%;margin:6px 0 15px"><option value="blue">Ocean blue</option><option value="violet">Nebula violet</option><option value="mint">Mint dusk</option></select><label class="muted">Demo screen</label><select class="field" id="screenMode" style="width:100%;margin:6px 0 15px"><option value="home">Home screen</option><option value="messages">Messages preview</option><option value="music">Music player</option><option value="locked">Lock screen</option></select><button class="btn primary" id="applyScreen">Apply preview</button></div></div></section>
 
-                let screenRes = await fetch('/api/screen');
-                let screenData = await screenRes.json();
-                if(screenData.frame) {
-                    document.getElementById('screenContainer').innerHTML = `<img src="data:image/jpeg;base64,${screenData.frame}" alt="Live Screen">`;
-                }
-            } catch(e) {}
-        }
-        
-        setInterval(pollData, 500); // 500ms ultra-fast poll
+<section class="page" id="location"><div class="note">All map pins are fictional demo coordinates. This page does not request or track anyone's location.</div><div class="grid split"><div class="mapmock"><div class="road"></div><div class="road r2"></div><span class="pin" style="left:24%;top:23%">●</span><span class="pin" style="left:66%;top:48%">●</span><span class="pin" style="left:48%;top:73%">●</span><span style="position:absolute;left:28%;top:27%;font-size:11px;color:#b4d1df">Demo point A</span><span style="position:absolute;left:70%;top:52%;font-size:11px;color:#b4d1df">Demo point B</span><span style="position:absolute;left:52%;top:77%;font-size:11px;color:#b4d1df">Demo point C</span></div><div class="card"><h2 style="margin-top:0">Simulated locations</h2><div class="feeditem"><div class="feedicon">⌖</div><div><b>Demo point A</b><small>12.9716° N, 77.5946° E · Example only</small></div></div><div class="feeditem"><div class="feedicon">⌖</div><div><b>Demo point B</b><small>13.0827° N, 80.2707° E · Example only</small></div></div><div class="feeditem"><div class="feedicon">⌖</div><div><b>Demo point C</b><small>11.0168° N, 76.9558° E · Example only</small></div></div><button class="btn" id="shufflePins" style="margin-top:14px">Shuffle demo pins</button></div></div></section>
 
-        function log(msg) {
-            let box = document.getElementById('logBox');
-            let time = new Date().toLocaleTimeString();
-            box.textContent += `\\n[${time}] ${msg}`;
-            box.scrollTop = box.scrollHeight;
-        }
-    </script>
-</body>
-</html>
-"""
+<section class="page" id="keylogger"><div class="note">Safe Keylogger Lab: only keystrokes typed into the test box below are shown. It does not capture system-wide typing, other apps, passwords, or another device.</div><div class="grid split"><div class="card"><div class="row"><h2 style="margin:0">Live keystroke simulator</h2><span class="pill">LOCAL ONLY</span></div><p class="muted">Type here to watch key events appear live in the event console.</p><textarea class="demoInput" id="keyInput" placeholder="Click here and type a sample message…"></textarea><div class="toolbar" style="margin-top:12px"><button class="btn" id="clearKeys">Clear events</button><button class="btn" id="downloadKeys">Download demo log</button></div><div class="row"><span class="muted">Captured in this box</span><b id="keyCount">0 events</b></div></div><div class="card"><div class="sectionhead" style="margin-top:0"><h2>Live event stream</h2><span class="demo-pill"><i class="dot"></i> RUNNING</span></div><div class="console" id="keyConsole">[LAB] Waiting for input…\n[LAB] Scope: this text field only.\n</div><p class="muted" style="font-size:12px">For privacy, typed characters are processed locally in this page and are not transmitted anywhere.</p></div></div></section>
+
+<section class="page" id="camera"><div class="note">Camera lab is a mock interface. It does not activate a camera or save images.</div><div class="grid split"><div class="card center"><div style="height:280px;border:1px dashed #38637a;border-radius:12px;display:grid;place-items:center;background:radial-gradient(ellipse,#163a4d,#081824);font-size:58px">◉<div style="font-size:12px;color:var(--muted)">SIMULATED CAMERA PREVIEW</div></div><div class="toolbar" style="justify-content:center;margin-top:15px"><button class="btn primary" id="captureMock">Capture demo frame</button><button class="btn" id="clearCapture">Clear</button></div></div><div class="card"><h2 style="margin-top:0">Capture history</h2><div id="captureHistory" class="muted">No demo frames captured yet.</div></div></div></section>
+
+<section class="page" id="audio"><div class="note">Audio lab is a UI simulation only. No microphone is opened and no audio is recorded.</div><div class="card"><div class="row"><div><h2 style="margin:0">Audio diagnostics</h2><p class="muted">Simulated signal meter</p></div><span class="pill" id="audioStatus">STANDBY</span></div><div style="height:100px;display:flex;align-items:center;gap:4px;justify-content:center;margin:25px 0" id="wave"></div><div class="toolbar"><button class="btn primary" id="audioStart">Start simulated test</button><button class="btn" id="audioStop">Stop</button></div><p class="muted" id="audioText">Ready for a local visual test.</p></div></section>
+
+<section class="page" id="notifications"><div class="note">Sample notifications for interface preview only.</div><div class="card" id="notificationList"></div></section>
+<section class="page" id="activity"><div class="toolbar"><input class="field search" id="logSearch" placeholder="Filter activity…"><button class="btn" id="clearActivity">Clear demo logs</button></div><div class="card"><div id="activityList"></div></div></section>
+<section class="page" id="security"><div class="note">This section shows the permissions required by a real, consent-based Android app. This browser demo has no access to phone-level permissions.</div><div class="grid stats"><div class="card"><div class="statlabel">Network link</div><div class="statnum" style="font-size:21px">Offline</div><span class="pill">No relay connected</span></div><div class="card"><div class="statlabel">Data access</div><div class="statnum" style="font-size:21px">None</div><span class="pill">Sandbox only</span></div><div class="card"><div class="statlabel">Background capture</div><div class="statnum" style="font-size:21px">Disabled</div><span class="pill">Privacy first</span></div><div class="card"><div class="statlabel">Audit state</div><div class="statnum" style="font-size:21px">Ready</div><span class="pill">Demo audit</span></div></div><div class="card"><h2 style="margin-top:0">Permission checklist</h2><div id="permissionList"></div></div></section>
+<section class="page" id="settings"><div class="card"><h2 style="margin-top:0">Dashboard settings</h2><p class="muted">Change visual preferences for this local demo.</p><div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)"><div><b>Compact cards</b><div class="muted">Reduce spacing in dashboard cards</div></div><input class="toggle" type="checkbox" id="compactToggle"></div><div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)"><div><b>Reduced motion</b><div class="muted">Use calmer page transitions</div></div><input class="toggle" type="checkbox" id="motionToggle"></div><div class="row" style="padding:12px 0"><div><b>Reset demo data</b><div class="muted">Restore sample records and activity feed</div></div><button class="btn danger" id="resetDemo">Reset demo</button></div><p class="muted" id="settingsStatus"></p></div></section>
+<div class="footnote">TSUKUYOMI CONTROL LAB · UI PROTOTYPE · FICTIONAL DATA ONLY · NO REAL DEVICE CONNECTION</div>
+</main></div>
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const devices=[{name:"Pixel Demo 01",os:"Android 15",id:"DEMO-7A21",battery:84,status:"ONLINE"},{name:"Galaxy Sample 02",os:"Android 14",id:"DEMO-4C90",battery:62,status:"ONLINE"},{name:"Emulator Lab 03",os:"Android 13",id:"DEMO-EM03",battery:37,status:"IDLE"}];
+const contacts=[
+["Aarav Kumar","+91 90000 10001","aarav.demo@example.test","Friends"],["Meera S.","+91 90000 10002","meera.demo@example.test","Family"],["Kavin Raj","+91 90000 10003","kavin.demo@example.test","Work"],["Nila Devi","+91 90000 10004","nila.demo@example.test","Friends"],["Arjun P.","+91 90000 10005","arjun.demo@example.test","Work"],["Diya R.","+91 90000 10006","diya.demo@example.test","Family"],["Vikram N.","+91 90000 10007","vikram.demo@example.test","Friends"],["Ananya V.","+91 90000 10008","ananya.demo@example.test","Work"],["Rohan K.","+91 90000 10009","rohan.demo@example.test","Friends"],["Isha M.","+91 90000 10010","isha.demo@example.test","Family"]];
+const media=[["Sunrise_sample.jpg","photo","▧","2.4 MB"],["Trip_preview.mp4","video","▶","18.2 MB"],["Wallpaper_blue.png","photo","🌊","1.1 MB"],["Demo_clip_01.mp4","video","▶","8.7 MB"],["Landscape_mock.jpg","photo","▧","3.6 MB"],["Screen_record_demo.mp4","video","▶","24.0 MB"],["Gallery_sample.png","photo","▧","980 KB"],["Ocean_view.jpg","photo","🌅","2.1 MB"],["UI_walkthrough.mp4","video","▶","12.5 MB"]];
+const folders={"DCIM":[["Camera","folder","📁","12 items"],["Screenshots","folder","📁","26 items"],["Sample_photo.jpg","photo","🖼️","2.4 MB"]],"Movies":[["Trip_preview.mp4","video","▶","18.2 MB"],["Demo_clip_01.mp4","video","▶","8.7 MB"]],"Documents":[["Notes_demo.pdf","file","📄","240 KB"],["Checklist.txt","file","📃","4 KB"],["Report_sample.docx","file","📄","82 KB"]],"Downloads":[["Wallpaper_blue.png","photo","🖼️","1.1 MB"],["Archive_demo.zip","file","🗜️","3.2 MB"]],"Music":[["Ambient_loop.mp3","file","♫","5.6 MB"],["Demo_track.wav","file","♫","18 MB"]],"Android":[["data (restricted demo)","file","🔒","Protected sample"],["media (sample)","folder","📁","4 items"]]};
+const threads=[{name:"Meera S.",phone:"+91 90000 10002",msgs:[["them","Hey! How was your day?","10:22"],["me","Pretty good, thanks!","10:24"],["them","Nice 😊 Catch up soon.","10:25"]]},{name:"Aarav Kumar",phone:"+91 90000 10001",msgs:[["them","Sent the demo files.","09:15"],["me","Got them, thank you.","09:18"]]},{name:"Kavin Raj",phone:"+91 90000 10003",msgs:[["me","Meeting at 3?","Yesterday"],["them","Yep, see you there.","Yesterday"]]},{name:"Nila Devi",phone:"+91 90000 10004",msgs:[["them","Remember to take a break!","Yesterday"]]}];
+let currentThread=0,activeFolder=null,logs=[],keyEvents=0,audioTimer=null,captures=0;
+function addLog(title,detail){logs.unshift({title,detail,time:new Date().toLocaleTimeString()});renderLogs();renderFeed()}
+function renderFeed(){let el=$("#overviewFeed");if(!el)return;el.innerHTML=logs.slice(0,4).map(l=>`<div class="feeditem"><div class="feedicon">↗</div><div><b>${esc(l.title)}</b><small>${esc(l.detail)} · ${l.time}</small></div></div>`).join("")||'<div class="empty">No activity yet.</div>'}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function go(page){$$(".page").forEach(p=>p.classList.toggle("active",p.id===page));$$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===page));$("#pageTitle").textContent=($(`[data-page="${page}"]`)?.textContent||page).trim().replace(/^[^\w]+/,"");window.scrollTo({top:0,behavior:"smooth"});addLog("Opened module",page)}
+$$(".nav").forEach(b=>b.addEventListener("click",()=>go(b.dataset.page)));$$("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
+function renderDevices(){let q=($("#deviceSearch")?.value||"").toLowerCase();$("#deviceList").innerHTML=devices.filter(d=>(d.name+d.os+d.id).toLowerCase().includes(q)).map(d=>`<article class="card device"><div class="deviceicon">▣</div><div class="status">● ${d.status} · SIMULATED</div><h3>${d.name}</h3><p>${d.os} · ${d.id}</p><div style="clear:both;height:14px"></div><div class="row"><span class="muted">Battery</span><b>${d.battery}%</b></div><div class="bar"><i style="width:${d.battery}%"></i></div><div class="row"><span class="muted">Connection: none</span><button class="btn" onclick="go('security')">Details</button></div></article>`).join("")||'<div class="empty">No matching demo devices.</div>'}
+function renderContacts(){let q=($("#contactSearch").value||"").toLowerCase();$("#contactsBody").innerHTML=contacts.filter(c=>c.join(" ").toLowerCase().includes(q)).map(c=>`<tr><td><span class="avatar">${c[0][0]}</span>${esc(c[0])}</td><td>${esc(c[1])}</td><td>${esc(c[2])}</td><td><span class="pill">${esc(c[3])}</span></td></tr>`).join("")||'<tr><td colspan="4" class="empty">No matching sample contacts.</td></tr>'}
+function renderThreads(){let q=($("#smsSearch").value||"").toLowerCase();$("#threads").innerHTML=threads.map((t,i)=>({t,i})).filter(x=>(x.t.name+x.t.phone).toLowerCase().includes(q)).map(({t,i})=>`<button class="nav ${i===currentThread?"active":""}" style="width:100%" onclick="selectThread(${i})"><span class="avatar">${t.name[0]}</span><span style="text-align:left;flex:1"><b style="display:block">${t.name}</b><small class="muted">${t.msgs.at(-1)?.[1]||""}</small></span></button>`).join("")}
+function selectThread(i){currentThread=i;let t=threads[i];$("#threadTitle").textContent=t.name;$("#threadMessages").innerHTML=t.msgs.map(m=>`<div style="display:flex;justify-content:${m[0]==="me"?"flex-end":"flex-start"};margin:10px 0"><div style="max-width:85%;padding:10px 12px;border:1px solid var(--line);background:${m[0]==="me"?"#12364a":"#0a1b29"};border-radius:12px"><div>${esc(m[1])}</div><small class="muted">${m[2]}</small></div></div>`).join("");renderThreads()}
+function renderMedia(){let q=($("#mediaSearch").value||"").toLowerCase(),type=$("#mediaType").value;$("#mediaList").innerHTML=media.filter(m=>(type==="all"||m[1]===type)&&m[0].toLowerCase().includes(q)).map(m=>`<div class="media"><div class="thumb">${m[2]}</div><div><b>${esc(m[0])}</b><small>${m[1].toUpperCase()} · ${m[3]}</small></div></div>`).join("")||'<div class="empty">No matching demo media.</div>'}
+function renderFiles(){let q=($("#fileSearch").value||"").toLowerCase();$("#folderContents").classList.add("hidden");$("#fileList").classList.remove("hidden");$("#fileList").innerHTML=Object.entries(folders).filter(([name,items])=>(name+items.flat().join(" ")).toLowerCase().includes(q)).map(([name,items])=>`<button class="card folder" style="text-align:left;color:var(--text)" onclick="openFolder('${name}')"><span class="ficon">📁</span><span><b>${name}</b><small>${items.length} sample items</small></span></button>`).join("")||'<div class="empty">No matching folders.</div>'}
+function openFolder(name){activeFolder=name;$("#folderContents").classList.remove("hidden");$("#folderList");$("#folderTitle").textContent=name;$("#folderFiles").innerHTML=(folders[name]||[]).map(f=>`<div class="feeditem"><div class="feedicon">${f[2]}</div><div><b>${esc(f[0])}</b><small>${f[1].toUpperCase()} · ${esc(f[3])}</small></div></div>`).join("");}
+function renderLogs(){let q=($("#logSearch")?.value||"").toLowerCase();$("#activityList").innerHTML=logs.filter(l=>(l.title+l.detail).toLowerCase().includes(q)).map(l=>`<div class="feeditem"><div class="feedicon">≋</div><div><b>${esc(l.title)}</b><small>${esc(l.detail)} · ${l.time}</small></div></div>`).join("")||'<div class="empty">No demo events.</div>'}
+function init(){logs=[{title:"Sandbox initialized",detail:"Demo environment ready",time:new Date().toLocaleTimeString()},{title:"Security audit",detail:"No live device connection",time:new Date().toLocaleTimeString()},{title:"Sample dataset loaded",detail:"Contacts, messages, media",time:new Date().toLocaleTimeString()}];renderDevices();renderContacts();renderThreads();selectThread(0);renderMedia();renderFiles();renderLogs();renderFeed();$("#notificationList").innerHTML=[["✉","Sample message","Meera S. · 10:25"],["⬇","Demo file added","Downloads · 09:18"],["◈","Security check complete","Sandbox · 08:00"],["♫","Audio lab ready","Local demo · Yesterday"]].map(n=>`<div class="feeditem"><div class="feedicon">${n[0]}</div><div><b>${n[1]}</b><small>${n[2]}</small></div></div>`).join("");$("#permissionList").innerHTML=[["Contacts","Would require explicit Android runtime permission"],["Microphone","Would require visible, consent-based permission"],["Camera","Would require explicit Android runtime permission"],["Location","Would require user consent and clear disclosure"],["Screen capture","Would require Android screen-capture consent"],["Notifications","Would require notification access/permission"]].map(p=>`<div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)"><div><b>${p[0]}</b><div class="muted">${p[1]}</div></div><span class="pill">NOT REQUESTED</span></div>`).join("");$("#wave").innerHTML=Array.from({length:42},(_,i)=>`<i style="height:${8+(i*17%48)}px;width:4px;border-radius:4px;background:linear-gradient(var(--blue),#24658a);opacity:.65"></i>`).join("");}
+$("#deviceSearch").addEventListener("input",renderDevices);$("#refreshDevices").onclick=()=>{renderDevices();addLog("Refreshed demo devices","Sample profiles reloaded")};$("#contactSearch").addEventListener("input",renderContacts);$("#exportContacts").onclick=()=>{let csv="Name,Phone,Email,Group\n"+contacts.map(c=>c.map(v=>'"'+v.replaceAll('"','""')+'"').join(",")).join("\n");download("tsukuyomi-demo-contacts.csv",csv);addLog("Exported demo contacts","CSV generated locally")};$("#smsSearch").addEventListener("input",renderThreads);$("#addReply").onclick=()=>{let v=$("#smsDraft").value.trim();if(!v)return;threads[currentThread].msgs.push(["me",v,new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})]);$("#smsDraft").value="";selectThread(currentThread);addLog("Added demo reply","Local sample thread updated")};$("#mediaSearch").addEventListener("input",renderMedia);$("#mediaType").addEventListener("change",renderMedia);$("#fileSearch").addEventListener("input",renderFiles);$("#backFolders").onclick=()=>{activeFolder=null;renderFiles()};$("#shufflePins").onclick=()=>{$$(".pin").forEach(p=>{p.style.left=(10+Math.random()*75)+"%";p.style.top=(10+Math.random()*75)+"%"});addLog("Shuffled map pins","Fictional coordinates only")};
+$("#keyInput").addEventListener("keydown",e=>{keyEvents++;let line=`[${new Date().toLocaleTimeString()}] keydown=${e.key===" "?"SPACE":e.key==="Enter"?"ENTER":e.key==="Backspace"?"BACKSPACE":e.key} · code=${e.code}`;$("#keyConsole").textContent+=line+"\n";$("#keyConsole").scrollTop=$("#keyConsole").scrollHeight;$("#keyCount").textContent=keyEvents+" events"});$("#clearKeys").onclick=()=>{keyEvents=0;$("#keyCount").textContent="0 events";$("#keyConsole").textContent="[LAB] Cleared.\n[LAB] Scope: this text field only.\n";$("#keyInput").value=""};$("#downloadKeys").onclick=()=>download("tsukuyomi-keylogger-lab.txt",$("#keyConsole").textContent);
+$("#captureMock").onclick=()=>{$("#captureHistory").innerHTML=`<div class="feeditem"><div class="feedicon">▧</div><div><b>Demo frame ${++captures}</b><small>${new Date().toLocaleString()} · simulated placeholder</small></div></div>`+$("#captureHistory").innerHTML;addLog("Captured demo frame","No camera accessed")};$("#clearCapture").onclick=()=>{$("#captureHistory").textContent="No demo frames captured yet.";captures=0};
+$("#applyScreen").onclick=()=>{let w=$("#wallpaper").value,m=$("#screenMode").value,colors={blue:"linear-gradient(160deg,#12364a,#06131e)",violet:"linear-gradient(160deg,#36275c,#08131f)",mint:"linear-gradient(160deg,#174c4a,#06131e)"};let el=$("#phoneScreen");el.style.background=colors[w];let content={home:"<div class='row'><b>9:41</b><span>▮ ▰ ◉</span></div><h2 style='margin-top:48px'>Hello there.</h2><p class='muted'>Your demo screen is ready.</p><div class='card' style='padding:12px;margin-top:30px'>☁️<br><b>Weather</b><p class='muted'>Clear · 24°</p></div>",messages:"<div class='row'><b>9:41</b><span>▮ ▰ ◉</span></div><h2>Messages</h2><div class='card'>Meera S.<p class='muted'>Catch up soon 😊</p></div><div class='card'>Aarav Kumar<p class='muted'>Sent the demo files.</p></div>",music:"<div class='row'><b>9:41</b><span>▮ ▰ ◉</span></div><div style='text-align:center;margin-top:70px;font-size:48px'>♫</div><h2 class='center'>Ambient Demo</h2><p class='muted center'>Local preview · 02:14</p><div class='bar'><i style='width:40%'></i></div>",locked:"<div class='center' style='margin-top:70px'><div style='font-size:48px'>◷</div><h2>9:41</h2><p class='muted'>Tuesday · Demo device</p><p style='margin-top:100px'>Swipe to unlock (mock)</p></div>"};el.innerHTML=content[m]+(m==="locked"?"":"<div class='row'><span>●</span><span>◉</span><span>▢</span></div>");addLog("Updated screen preview",m+" / "+w)};$("#audioStart").onclick=()=>{$("#audioStatus").textContent="SIMULATING";$("#audioText").textContent="Visual signal animation running. No microphone is active.";$("#wave").querySelectorAll("i").forEach(i=>i.style.animation="pulse .3s infinite alternate");if(!document.querySelector("#pulseStyle")){let st=document.createElement("style");st.id="pulseStyle";st.textContent="@keyframes pulse{from{transform:scaleY(.4);opacity:.4}to{transform:scaleY(1.2);opacity:1}}";document.head.append(st)}addLog("Started audio simulation","No audio captured")};$("#audioStop").onclick=()=>{$("#audioStatus").textContent="STANDBY";$("#audioText").textContent="Simulation stopped.";$("#wave").querySelectorAll("i").forEach(i=>i.style.animation="none")};$("#logSearch").addEventListener("input",renderLogs);$("#clearActivity").onclick=()=>{logs=[];renderLogs();renderFeed()};$("#compactToggle").onchange=e=>{document.querySelectorAll(".card").forEach(c=>c.style.padding=e.target.checked?"10px":"");$("#settingsStatus").textContent="Compact spacing "+(e.target.checked?"enabled":"disabled")};$("#motionToggle").onchange=e=>{document.documentElement.style.scrollBehavior=e.target.checked?"auto":"smooth";document.querySelectorAll(".page").forEach(p=>p.style.animation=e.target.checked?"none":"");$("#settingsStatus").textContent="Reduced motion "+(e.target.checked?"enabled":"disabled")};$("#resetDemo").onclick=()=>{init();$("#settingsStatus").textContent="Demo data reset.";addLog("Reset demo","Sample data restored")};
+function download(name,text){let a=document.createElement("a"),u=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+function tick(){$("#clock").textContent=new Date().toLocaleTimeString()}setInterval(tick,1000);tick();init();
+</script>
+</html>"""
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
     return HTML_TEMPLATE
-
-@app.api_route("/api/command", methods=["GET", "POST"])
-async def handle_command(request: Request):
-    global current_command
-    if request.method == "POST":
-        data = await request.json()
-        current_command = data.get("command", "")
-        return {"status": "success"}
-    cmd = current_command
-    current_command = ""
-    return {"command": cmd}
-
-@app.api_route("/api/response", methods=["GET", "POST"])
-async def handle_response(request: Request):
-    global latest_response
-    if request.method == "POST":
-        data = await request.json()
-        latest_response = data.get("response", "")
-        return {"status": "success"}
-    return {"response": latest_response}
-
-@app.api_route("/api/screen", methods=["GET", "POST"])
-async def handle_screen(request: Request):
-    global latest_screen_frame
-    if request.method == "POST":
-        data = await request.json()
-        latest_screen_frame = data.get("frame", "")
-        return {"status": "success"}
-    return {"frame": latest_screen_frame}
