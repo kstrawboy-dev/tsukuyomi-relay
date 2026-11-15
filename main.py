@@ -279,8 +279,9 @@ async def app_websocket(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            # CHANGE THIS LINE: Remove "[App Data]: " prefix so clean data reaches dashboard
             for dash in dashboard_clients:
-                await dash.send_text(f"[App Data]: {data}")
+                await dash.send_text(data)
     except WebSocketDisconnect:
         connected_clients.remove(websocket)
 
