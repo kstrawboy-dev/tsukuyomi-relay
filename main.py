@@ -204,7 +204,14 @@ HTML_DASHBOARD = """
         };
 
         ws.onmessage = function(event) {
-            logToTerminal(`[Incoming]: ${event.data}`);
+            let msg = event.data;
+            if (msg.startsWith("DEVICE_DATA|")) {
+                let dataDetails = msg.replace("DEVICE_DATA|", "");
+                logToTerminal(`📱 [TARGET INFO RECEIVED]:`);
+                logToTerminal(`   -> ${dataDetails}`);
+            } else {
+                logToTerminal(`[Incoming]: ${msg}`);
+            }
         };
 
         ws.onclose = function() {
